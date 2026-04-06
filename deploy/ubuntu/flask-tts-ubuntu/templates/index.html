@@ -1,0 +1,452 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>文本转语音</title>
+    <style>
+        :root {
+            --bg: #f5f7fa;
+            --card: #ffffff;
+            --primary: #6366f1;
+            --primary-hover: #4f46e5;
+            --text: #1e293b;
+            --text-secondary: #64748b;
+            --border: #e2e8f0;
+            --success: #10b981;
+            --radius: 16px;
+            --shadow: 0 1px 3px rgba(0,0,0,.06), 0 1px 2px rgba(0,0,0,.04);
+            --shadow-lg: 0 10px 25px rgba(0,0,0,.08), 0 4px 10px rgba(0,0,0,.04);
+        }
+
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, "PingFang SC", "Microsoft YaHei", sans-serif;
+            background: var(--bg);
+            color: var(--text);
+            min-height: 100vh;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: flex-start;
+            padding: 24px 16px;
+        }
+
+        .container {
+            width: 100%;
+            max-width: 560px;
+        }
+
+        /* Header */
+        .header {
+            text-align: center;
+            margin-bottom: 32px;
+        }
+        .header-icon {
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
+            width: 56px;
+            height: 56px;
+            border-radius: 16px;
+            background: linear-gradient(135deg, var(--primary), #818cf8);
+            margin-bottom: 16px;
+        }
+        .header-icon svg { width: 28px; height: 28px; fill: #fff; }
+        .header h1 {
+            font-size: 24px;
+            font-weight: 700;
+            letter-spacing: -0.02em;
+            margin-bottom: 6px;
+        }
+        .header p {
+            font-size: 14px;
+            color: var(--text-secondary);
+        }
+
+        /* Card */
+        .card {
+            background: var(--card);
+            border-radius: var(--radius);
+            box-shadow: var(--shadow);
+            padding: 24px;
+            border: 1px solid var(--border);
+        }
+
+        /* Form Group */
+        .form-group { margin-bottom: 20px; }
+        .form-label {
+            display: block;
+            font-size: 13px;
+            font-weight: 600;
+            color: var(--text-secondary);
+            margin-bottom: 8px;
+            text-transform: uppercase;
+            letter-spacing: 0.04em;
+        }
+
+        /* Textarea */
+        .textarea {
+            width: 100%;
+            min-height: 120px;
+            padding: 14px 16px;
+            font-size: 15px;
+            line-height: 1.6;
+            color: var(--text);
+            background: var(--bg);
+            border: 1.5px solid var(--border);
+            border-radius: 12px;
+            resize: vertical;
+            transition: border-color .2s, box-shadow .2s;
+            font-family: inherit;
+        }
+        .textarea:focus {
+            outline: none;
+            border-color: var(--primary);
+            box-shadow: 0 0 0 3px rgba(99,102,241,.15);
+        }
+        .textarea::placeholder { color: #94a3b8; }
+
+        .char-count {
+            text-align: right;
+            font-size: 12px;
+            color: var(--text-secondary);
+            margin-top: 6px;
+        }
+        .char-count.warn { color: #f59e0b; }
+        .char-count.over { color: #ef4444; }
+
+        /* Select */
+        .select-wrapper { position: relative; }
+        .select-wrapper::after {
+            content: '';
+            position: absolute;
+            right: 16px;
+            top: 50%;
+            transform: translateY(-50%);
+            pointer-events: none;
+            border: 5px solid transparent;
+            border-top: 5px solid var(--text-secondary);
+        }
+        .select {
+            width: 100%;
+            padding: 12px 16px;
+            font-size: 14px;
+            color: var(--text);
+            background: var(--bg);
+            border: 1.5px solid var(--border);
+            border-radius: 12px;
+            appearance: none;
+            cursor: pointer;
+            transition: border-color .2s, box-shadow .2s;
+            font-family: inherit;
+        }
+        .select:focus {
+            outline: none;
+            border-color: var(--primary);
+            box-shadow: 0 0 0 3px rgba(99,102,241,.15);
+        }
+
+        /* Voice Tags */
+        .voice-tags {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 8px;
+            margin-top: 10px;
+        }
+        .voice-tag {
+            display: inline-flex;
+            align-items: center;
+            gap: 4px;
+            padding: 4px 10px;
+            font-size: 12px;
+            font-weight: 500;
+            background: #f0fdf4;
+            color: #166534;
+            border-radius: 20px;
+        }
+
+        /* Actions */
+        .actions {
+            display: flex;
+            gap: 10px;
+            margin-top: 24px;
+        }
+        .btn {
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
+            gap: 8px;
+            padding: 14px 24px;
+            font-size: 15px;
+            font-weight: 600;
+            border: none;
+            border-radius: 12px;
+            cursor: pointer;
+            transition: all .2s;
+            font-family: inherit;
+            text-decoration: none;
+        }
+        .btn svg { width: 18px; height: 18px; flex-shrink: 0; }
+        .btn-primary {
+            flex: 1;
+            background: var(--primary);
+            color: #fff;
+        }
+        .btn-primary:hover:not(:disabled) {
+            background: var(--primary-hover);
+            transform: translateY(-1px);
+            box-shadow: var(--shadow-lg);
+        }
+        .btn-primary:disabled {
+            opacity: .5;
+            cursor: not-allowed;
+        }
+        .btn-secondary {
+            background: var(--bg);
+            color: var(--text);
+            border: 1.5px solid var(--border);
+            padding: 14px 16px;
+        }
+        .btn-secondary:hover:not(:disabled) {
+            border-color: var(--primary);
+            color: var(--primary);
+        }
+        .btn-secondary:disabled {
+            opacity: .4;
+            cursor: not-allowed;
+        }
+
+        /* Audio Player */
+        .player {
+            margin-top: 20px;
+            padding: 16px;
+            background: var(--bg);
+            border-radius: 12px;
+            border: 1px solid var(--border);
+            display: none;
+        }
+        .player.show { display: block; }
+        .player audio {
+            width: 100%;
+            height: 40px;
+            outline: none;
+        }
+        .player-label {
+            font-size: 12px;
+            color: var(--text-secondary);
+            margin-bottom: 8px;
+            font-weight: 500;
+        }
+
+        /* Toast */
+        .toast {
+            position: fixed;
+            bottom: 24px;
+            left: 50%;
+            transform: translateX(-50%) translateY(100px);
+            padding: 12px 20px;
+            font-size: 14px;
+            font-weight: 500;
+            background: #1e293b;
+            color: #fff;
+            border-radius: 12px;
+            box-shadow: var(--shadow-lg);
+            opacity: 0;
+            transition: all .3s ease;
+            z-index: 1000;
+            max-width: calc(100vw - 32px);
+            text-align: center;
+        }
+        .toast.show {
+            opacity: 1;
+            transform: translateX(-50%) translateY(0);
+        }
+        .toast.error { background: #ef4444; }
+
+        /* Footer */
+        .footer {
+            margin-top: 40px;
+            text-align: center;
+            font-size: 12px;
+            color: var(--text-secondary);
+        }
+        .footer a {
+            color: var(--primary);
+            text-decoration: none;
+        }
+
+        /* Loading Spinner */
+        @keyframes spin { to { transform: rotate(360deg); } }
+        .spinner {
+            width: 18px;
+            height: 18px;
+            border: 2px solid rgba(255,255,255,.3);
+            border-top-color: #fff;
+            border-radius: 50%;
+            animation: spin .6s linear infinite;
+        }
+
+        /* Responsive */
+        @media (max-width: 480px) {
+            body { padding: 16px 12px; }
+            .card { padding: 20px 16px; }
+            .header { margin-bottom: 24px; }
+            .header h1 { font-size: 20px; }
+            .actions { flex-direction: column; }
+            .btn-secondary { flex-direction: row; }
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <!-- Header -->
+        <div class="header">
+            <div class="header-icon">
+                <svg viewBox="0 0 24 24"><path d="M12 1a3 3 0 0 0-3 3v8a3 3 0 0 0 6 0V4a3 3 0 0 0-3-3zm-1 14.93A5.001 5.001 0 0 1 7 11h-1a6.001 6.001 0 0 0 5 5.91V20H8v2h8v-2h-3v-3.07A6.001 6.001 0 0 0 18 11h-1a5.001 5.001 0 0 1-4 4.93V15.93z"/></svg>
+            </div>
+            <h1>文本转语音</h1>
+            <p>输入文字，即刻生成语音</p>
+        </div>
+
+        <!-- Card -->
+        <div class="card">
+            <div class="form-group">
+                <label class="form-label" for="text">输入文本</label>
+                <textarea id="text" class="textarea" placeholder="请输入要转换的文字..." maxlength="5000"></textarea>
+                <div class="char-count" id="charCount">0 / 5000</div>
+            </div>
+
+            <div class="form-group">
+                <label class="form-label" for="voice">选择音色</label>
+                <div class="select-wrapper">
+                    <select id="voice" class="select">
+                        {% for voice in voices %}
+                        <option value="{{ loop.index0 }}">
+                            {{ voice.name }}
+                            {% if 'ZH-CN' in voice.id or 'zh' in voice.id|lower %}
+                                · 中文
+                            {% elif 'EN-US' in voice.id or 'en' in voice.id|lower %}
+                                · 英文
+                            {% else %}
+                                · {{ voice.languages[0] if voice.languages else '未知' }}
+                            {% endif %}
+                        </option>
+                        {% endfor %}
+                    </select>
+                </div>
+                <div class="voice-tags">
+                    {% for voice in voices %}
+                    <span class="voice-tag">
+                        {% if 'ZH-CN' in voice.id or 'zh' in voice.id|lower %}🇨🇳{% elif 'EN-US' in voice.id or 'en' in voice.id|lower %}🇺🇸{% else %}🌐{% endif %}
+                        {{ voice.name.split('(')[-1].rstrip(')') if '(' in voice.name else voice.name }}
+                    </span>
+                    {% endfor %}
+                </div>
+            </div>
+
+            <!-- Actions -->
+            <div class="actions">
+                <button id="convert" class="btn btn-primary">
+                    <svg id="btnIcon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polygon points="5 3 19 12 5 21 5 3"/></svg>
+                    <span id="btnText">转换为语音</span>
+                </button>
+                <a id="download" class="btn btn-secondary" download title="下载语音文件">
+                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>
+                </a>
+            </div>
+
+            <!-- Player -->
+            <div class="player" id="player">
+                <div class="player-label">🎧 播放预览</div>
+                <audio id="audio" controls></audio>
+            </div>
+        </div>
+
+        <!-- Footer -->
+        <div class="footer">
+            Powered by pyttsx3 · 离线合成 · 即时可用
+        </div>
+    </div>
+
+    <!-- Toast -->
+    <div class="toast" id="toast"></div>
+
+    <script>
+        const $ = id => document.getElementById(id);
+        const textEl = $('text');
+        const charCountEl = $('charCount');
+        const convertBtn = $('convert');
+        const btnText = $('btnText');
+        const btnIcon = $('btnIcon');
+        const downloadEl = $('download');
+        const audioEl = $('audio');
+        const playerEl = $('player');
+        const toastEl = $('toast');
+        const MAX_LEN = 5000;
+
+        // 字符计数
+        textEl.addEventListener('input', () => {
+            const len = textEl.value.length;
+            charCountEl.textContent = `${len} / ${MAX_LEN}`;
+            charCountEl.className = 'char-count' + (len > MAX_LEN * 0.9 ? (len >= MAX_LEN ? ' over' : ' warn') : '');
+        });
+
+        // Toast 提示
+        function showToast(msg, isError = false) {
+            toastEl.textContent = msg;
+            toastEl.className = 'toast' + (isError ? ' error' : '');
+            // 触发重绘
+            void toastEl.offsetWidth;
+            toastEl.classList.add('show');
+            setTimeout(() => toastEl.classList.remove('show'), 3000);
+        }
+
+        // 转换
+        convertBtn.addEventListener('click', async () => {
+            const text = textEl.value.trim();
+            const voiceIndex = $('voice').value;
+
+            if (!text) {
+                showToast('请输入要转换的文本', true);
+                return;
+            }
+
+            // 加载中
+            convertBtn.disabled = true;
+            btnText.textContent = '生成中...';
+            btnIcon.outerHTML = '<div class="spinner" id="btnIcon"></div>';
+            playerEl.classList.remove('show');
+            downloadEl.style.display = 'none';
+
+            try {
+                const res = await fetch('/api/speech', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ text, voice: voiceIndex })
+                });
+
+                const data = await res.json();
+
+                if (data.status === 'success') {
+                    audioEl.src = data.url;
+                    playerEl.classList.add('show');
+                    downloadEl.href = data.url;
+                    downloadEl.style.display = 'inline-flex';
+                    showToast('✅ 语音生成成功');
+                } else {
+                    showToast(data.error || '转换失败，请重试', true);
+                }
+            } catch (err) {
+                console.error('Error:', err);
+                showToast('网络错误，请检查连接后重试', true);
+            } finally {
+                convertBtn.disabled = false;
+                btnText.textContent = '转换为语音';
+                btnIcon.outerHTML = '<svg id="btnIcon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polygon points="5 3 19 12 5 21 5 3"/></svg>';
+            }
+        });
+    </script>
+</body>
+</html>
