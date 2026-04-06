@@ -907,6 +907,124 @@ if __name__ == '__main__':
 
 ---
 
+## 安装更多音色
+
+pyttsx3 使用系统内置的语音引擎，音色的数量和质量取决于操作系统。
+
+### Windows 系统
+
+Windows 使用 **SAPI5**（Speech API），音色来自系统已安装的语音包。
+
+#### 方案一：安装 Windows 语言包（推荐）
+
+1. 打开 **设置 → 时间和语言 → 语言和区域**
+2. 点击 **"添加语言"**
+3. 搜索并安装目标语言（如日语、韩语、法语、德语等）
+4. 安装完成后，点击该语言的 **"⋯ → 语言选项"**
+5. 在"功能"区域，确保 **"语音识别"** 和 **"文本转语音"** 已下载
+6. **重启 Python 应用**，新音色将自动出现在音色选择列表中
+
+> Windows 10/11 自带的语音质量较好。安装语言包后 pyttsx3 会自动识别。
+
+#### 方案二：安装第三方 SAPI5 语音包
+
+以下第三方语音引擎兼容 SAPI5，安装后 pyttsx3 可直接使用：
+
+| 厂商 | 类型 | 说明 |
+|------|------|------|
+| **[RhVoice](https://github.com/RhVoice/RhVoice)** | 免费开源 | 支持俄语、英语、格鲁吉亚语等 |
+| **[Balabolka](http://www.cross-plus-a.com/balabolka.htm)** | 免费 | 附带多个 SAPI5 兼容语音包 |
+| **CereProc** | 商业付费 | 高质量语音，支持多语言 |
+
+#### 方案三：查看当前可用音色
+
+运行项目自带的音色查看工具：
+
+```bash
+python list_voices.py
+```
+
+或使用 Python 代码手动查看：
+
+```python
+import pyttsx3
+engine = pyttsx3.init()
+voices = engine.getProperty('voices')
+for i, v in enumerate(voices):
+    print(f"{i}: {v.name}")
+    print(f"   ID: {v.id}")
+```
+
+---
+
+### Linux 系统
+
+Linux 使用 **espeak-ng** 作为语音后端。
+
+#### 方案一：安装 espeak-ng 多语言数据
+
+espeak-ng 内置 **100+ 种语音**，覆盖全球主要语言：
+
+```bash
+# Ubuntu/Debian
+sudo apt update
+sudo apt install -y espeak-ng espeak-ng-data
+
+# CentOS/RHEL
+sudo yum install -y espeak-ng
+
+# 查看所有可用语音
+espeak-ng --voices
+
+# 按语言过滤（如中文）
+espeak-ng --voices | grep zh
+espeak-ng --voices | grep en
+```
+
+> **注意**：espeak-ng 语音覆盖广但声音较机械，适合功能验证。
+
+#### 方案二：安装 MBROLA 高质量语音
+
+MBROLA 提供比 espeak 更自然的声音：
+
+```bash
+# Ubuntu/Debian
+sudo apt install -y mbrola mbrola-zh1 mbrola-en1
+
+# 查看所有可用的 MBROLA 语音包
+apt search mbrola
+```
+
+#### 方案三：使用 Festival（可选后端）
+
+```bash
+# Ubuntu/Debian
+sudo apt install -y festival festvox-kallpc16k
+```
+
+---
+
+### 音色方案对比
+
+| 方案 | 平台 | 音质 | 离线 | 免费 | 语言数 |
+|------|------|------|------|------|--------|
+| **SAPI5 系统音色** | Windows | ⭐⭐⭐ | ✅ | ✅ | 取决于安装的语言包 |
+| **espeak-ng** | Linux | ⭐⭐ | ✅ | ✅ | 100+ |
+| **MBROLA** | Linux | ⭐⭐⭐ | ✅ | ✅ | 40+ |
+| **Festival** | Linux | ⭐⭐ | ✅ | ✅ | 有限 |
+| **RhVoice** | Win/Linux | ⭐⭐⭐ | ✅ | ✅ | 10+ |
+| **Azure TTS** | 全平台 | ⭐⭐⭐⭐⭐ | ❌ | ❌ | 100+ |
+
+### 推荐组合
+
+| 场景 | 推荐方案 |
+|------|---------|
+| Windows 日常使用 | 系统设置 → 添加语言包 |
+| Linux 多语言支持 | `espeak-ng` + `mbrola` 组合 |
+| 追求高质量语音 | 考虑迁移到 `edge-tts` 或 Azure TTS |
+
+---
+
 ## 常见问题
 
 ### Q1: Windows 下运行报错 `ModuleNotFoundError: No module named 'pyttsx3'`
