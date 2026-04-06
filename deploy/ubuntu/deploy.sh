@@ -38,11 +38,17 @@ if ! command -v pip3 &> /dev/null; then
     sudo apt install -y python3-pip
 fi
 
-if ! dpkg -l | grep -q espeak; then
-    echo -e "${YELLOW}正在安装 espeak 依赖...${NC}"
+if ! dpkg -l | grep -q espeak-ng; then
+    echo -e "${YELLOW}正在安装 espeak-ng 依赖...${NC}"
     sudo apt update
-    sudo apt install -y espeak libespeak-dev
-    echo -e "${GREEN}✅ espeak 安装完成${NC}"
+    sudo apt install -y espeak-ng
+    echo -e "${GREEN}✅ espeak-ng 安装完成${NC}"
+elif ! dpkg -l | grep -q ' espeak '; then
+    # 兼容旧版本 espeak
+    echo -e "${YELLOW}检测到旧版 espeak，升级安装 espeak-ng...${NC}"
+    sudo apt update
+    sudo apt install -y espeak-ng
+    echo -e "${GREEN}✅ espeak-ng 安装完成${NC}"
 else
     echo -e "${GREEN}✅ espeak 已安装${NC}"
 fi

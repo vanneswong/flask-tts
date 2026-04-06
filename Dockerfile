@@ -7,7 +7,7 @@ WORKDIR /app
 
 # 安装系统级语音依赖
 RUN apt-get update && \
-    apt-get install -y --no-install-recommends espeak libespeak-dev && \
+    apt-get install -y --no-install-recommends espeak-ng && \
     rm -rf /var/lib/apt/lists/*
 
 # 安装 Python 依赖

@@ -56,7 +56,7 @@
 | **TTS 引擎** | pyttsx3 | 2.99 |
 | **前端样式** | Tailwind CSS | CDN |
 | **Python** | Python | 3.12+ |
-| **系统依赖 (Linux)** | espeak, libespeak-dev | - |
+| **系统依赖 (Linux)** | espeak-ng | - |
 | **容器化** | Docker | python:3.12-slim |
 
 ---
