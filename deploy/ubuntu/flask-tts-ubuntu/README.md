@@ -282,6 +282,20 @@ sudo ufw allow <端口>/tcp
 
 ## 🗑 卸载
 
+### 方式一：使用卸载脚本（推荐）
+
+```bash
+bash uninstall.sh
+```
+
+脚本会自动：
+- ✅ 检测并显示当前部署信息（端口、路径）
+- ✅ 停止并禁用 systemd 服务
+- ✅ 删除服务配置文件
+- ✅ 可选删除项目文件
+
+### 方式二：手动卸载
+
 ```bash
 # 停止服务
 sudo systemctl stop flask-tts
@@ -290,7 +304,8 @@ sudo systemctl disable flask-tts
 # 删除服务文件
 sudo rm /etc/systemd/system/flask-tts.service
 sudo systemctl daemon-reload
+sudo systemctl reset-failed
 
-# 删除项目目录
+# 删除项目目录（可选）
 rm -rf flask-tts-ubuntu
 ```
