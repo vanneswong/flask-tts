@@ -53,6 +53,20 @@ else
     echo -e "${GREEN}✅ espeak 已安装${NC}"
 fi
 
+# 确保中文语音数据已安装
+echo -e "${YELLOW}检查中文语音数据...${NC}"
+if ! espeak-ng --voices 2>/dev/null | grep -qi 'zh'; then
+    echo -e "${YELLOW}未检测到中文语音，正在安装...${NC}"
+    sudo apt install --reinstall -y espeak-ng-data
+    if espeak-ng --voices 2>/dev/null | grep -qi 'zh'; then
+        echo -e "${GREEN}✅ 中文语音数据安装完成${NC}"
+    else
+        echo -e "${YELLOW}⚠ 中文语音可能不可用，手动安装: sudo apt install --reinstall espeak-ng-data${NC}"
+    fi
+else
+    echo -e "${GREEN}✅ 中文语音数据已存在${NC}"
+fi
+
 echo ""
 echo -e "${YELLOW}[2/5] 选择部署端口${NC}"
 
