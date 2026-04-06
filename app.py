@@ -128,21 +128,42 @@ def api_speech():
         'url': f"/static/mp3/{filename}"
     })
 
+def _filter_voices(voices):
+    """过滤语音，只保留中文和英文"""
+    zh_keywords = ['zh', 'cmn', 'yue', 'hak', 'chinese', 'mandarin', 'cantonese']
+    en_keywords = ['en', 'english']
+
+    def is_zh_or_en(voice_id):
+        vid = voice_id.lower()
+        for kw in zh_keywords:
+            if kw in vid:
+                return True
+        for kw in en_keywords:
+            if kw in vid:
+                return True
+        return False
+
+    return [v for v in voices if is_zh_or_en(v.id)]
+
+
 @app.route('/health')
 def health():
     """健康检查接口"""
     voices = engine.getProperty('voices')
+    filtered = _filter_voices(voices)
     return jsonify({
         'status': 'healthy',
         'uptime': 'running',
-        'available_voices': len(voices)
+        'available_voices': len(filtered),
+        'total_voices': len(voices)
     })
 
 
 @app.route('/')
 def index():
     """主页"""
-    voices = engine.getProperty('voices')
+    all_voices = engine.getProperty('voices')
+    voices = _filter_voices(all_voices)
     return render_template('index.html', voices=voices)
 
 

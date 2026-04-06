@@ -2,15 +2,17 @@
 音色查看工具 — 列出 pyttsx3 在当前系统上所有可用的语音。
 
 用法:
-    python list_voices.py
+    python list_voices.py          # 默认只显示中文和英文
+    python list_voices.py --all    # 显示所有语言
 """
 
 import sys
 import platform
+import argparse
 import importlib.metadata
 
 
-def list_voices():
+def list_voices(show_all=False):
     try:
         import pyttsx3
     except ImportError:
@@ -33,37 +35,50 @@ def list_voices():
     if not voices:
         print("⚠ 未检测到任何可用音色。")
         print("  请检查:")
-        print("    Windows: 设置 → 时间和语言 → 语言和区域 → 安装语音包")
-        print("    Linux  : sudo apt install espeak-ng espeak-ng-data")
+        print("    Linux  : sudo apt install espeak-ng")
         print()
         sys.exit(1)
 
-    print(f"✅ 共发现 {len(voices)} 个可用音色:\n")
+    # 定义中文/英文的关键词
+    zh_keywords = ['zh', 'cmn', 'yue', 'hak', 'chinese', 'mandarin', 'cantonese']
+    en_keywords = ['en', 'english']
+
+    def is_zh_or_en(voice_id):
+        vid = voice_id.lower()
+        for kw in zh_keywords:
+            if kw in vid:
+                return True
+        for kw in en_keywords:
+            if kw in vid:
+                return True
+        return False
+
+    # 过滤语音
+    if not show_all:
+        voices = [v for v in voices if is_zh_or_en(v.id)]
+
+    if not voices:
+        print("⚠ 未检测到中文或英文语音。")
+        print("  查看全部语音: python list_voices.py --all")
+        print()
+        sys.exit(1)
+
+    print(f"✅ 发现 {len(voices)} 个可用音色:\n")
 
     for i, voice in enumerate(voices):
         # 尝试从 voice.id 推断语言
         voice_id = voice.id.lower()
         lang_tag = ""
-        if 'zh-cn' in voice_id or 'chinese' in voice_id:
+        if any(kw in voice_id for kw in ['zh', 'cmn', 'chinese', 'mandarin']):
             lang_tag = " 🇨🇳 中文"
-        elif 'zh-tw' in voice_id:
-            lang_tag = " 🇹🇼 繁体中文"
+        elif 'yue' in voice_id or 'cantonese' in voice_id:
+            lang_tag = " 🇭🇰 粤语"
         elif 'en-us' in voice_id or 'english' in voice_id:
             lang_tag = " 🇺🇸 英文"
         elif 'en-gb' in voice_id:
             lang_tag = " 🇬🇧 英式英文"
-        elif 'ja' in voice_id or 'japanese' in voice_id:
-            lang_tag = " 🇯🇵 日文"
-        elif 'ko' in voice_id or 'korean' in voice_id:
-            lang_tag = " 🇰🇷 韩文"
-        elif 'fr' in voice_id or 'french' in voice_id:
-            lang_tag = " 🇫🇷 法文"
-        elif 'de' in voice_id or 'german' in voice_id:
-            lang_tag = " 🇩🇪 德文"
-        elif 'es' in voice_id or 'spanish' in voice_id:
-            lang_tag = " 🇪🇸 西班牙文"
-        elif 'ru' in voice_id or 'russian' in voice_id:
-            lang_tag = " 🇷🇺 俄文"
+        elif 'en' in voice_id:
+            lang_tag = " 🇬🇧 英文"
         elif voice.languages:
             lang_tag = f" {voice.languages[0]}"
 
@@ -80,8 +95,15 @@ def list_voices():
     print(f"    curl -X POST http://localhost:5001/api/speech \\")
     print(f"      -H 'Content-Type: application/json' \\")
     print(f"      -d '{{\"text\":\"你好\",\"voice\":\"0\"}}'")
-    print(f"{'─'*60}\n")
+    print(f"{'─'*60}")
+
+    if not show_all:
+        print(f"\n  💡 查看所有 {len(engine.getProperty('voices'))} 种语言:")
+        print(f"     python list_voices.py --all\n")
 
 
 if __name__ == '__main__':
-    list_voices()
+    parser = argparse.ArgumentParser(description='查看系统可用音色')
+    parser.add_argument('--all', action='store_true', help='显示所有语言（默认只显示中文和英文）')
+    args = parser.parse_args()
+    list_voices(show_all=args.all)
