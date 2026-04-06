@@ -6,25 +6,97 @@
 
 ## 📋 目录
 
-- [快速部署（推荐）](#快速部署推荐)
-- [手动部署](#手动部署)
+- [部署方式选择](#部署方式选择)
+- [方式一：使用自包含部署包（推荐）](#方式一使用自包含部署包推荐)
+- [方式二：使用 Git 克隆](#方式二使用-git-克隆)
 - [服务管理](#服务管理)
 - [Nginx 反向代理（可选）](#nginx-反向代理可选)
 - [常见问题](#常见问题)
 
 ---
 
-## 快速部署（推荐）
+## 部署方式选择
 
-### 1. 上传项目到服务器
+本项目提供两种部署方式，请根据需求选择：
+
+| 方式 | 适用场景 | 优点 |
+|------|---------|------|
+| **自包含部署包** | 生产环境、快速部署 | 文件精简、无需 Git、即传即用 |
+| **Git 克隆** | 开发环境、需要更新代码 | 方便拉取更新、包含完整项目 |
+
+---
+
+## 方式一：使用自包含部署包（推荐）
+
+### 1. 打包部署包
+
+在项目根目录运行：
 
 ```bash
-# 方式一：使用 git clone
+bash deploy/ubuntu/package.sh
+```
+
+打包完成后，会生成 `deploy/ubuntu/flask-tts-ubuntu.tar.gz`。
+
+### 2. 上传到服务器
+
+```bash
+# 方式一：使用 scp
+scp deploy/ubuntu/flask-tts-ubuntu.tar.gz user@服务器IP:/home/user/
+
+# 方式二：使用 sftp
+sftp user@服务器IP
+put deploy/ubuntu/flask-tts-ubuntu.tar.gz
+```
+
+### 3. 解压并部署
+
+```bash
+# SSH 登录服务器
+ssh user@服务器IP
+
+# 解压
+tar -xzf flask-tts-ubuntu.tar.gz
+cd flask-tts-ubuntu
+
+# 运行部署脚本
+bash deploy.sh
+```
+
+### 部署脚本会自动完成
+
+| 步骤 | 说明 |
+|------|------|
+| 1/5 | 检查系统环境（Python、espeak） |
+| 2/5 | **交互式选择端口**（1024-65535） |
+| 3/5 | 创建 Python 虚拟环境 |
+| 4/5 | 安装所有依赖 |
+| 5/5 | 配置 systemd 服务并启动 |
+
+### 部署包内容
+
+```
+flask-tts-ubuntu/
+├── app.py                 # Flask 主应用
+├── requirements.txt       # Python 依赖
+├── list_voices.py         # 音色查看工具
+├── deploy.sh              # 一键部署脚本
+├── README.md              # 部署说明
+├── templates/
+│   └── index.html         # Web 界面
+└── static/
+    └── mp3/               # 语音文件存储目录
+```
+
+---
+
+## 方式二：使用 Git 克隆
+
+### 1. 克隆项目
+
+```bash
 git clone <你的仓库地址>
 cd flask-text2speech-pyttsx3
-
-# 方式二：使用 scp 上传
-scp -r flask-text2speech-pyttsx3 user@server:/path/to/
 ```
 
 ### 2. 运行部署脚本
@@ -33,87 +105,7 @@ scp -r flask-text2speech-pyttsx3 user@server:/path/to/
 bash deploy/ubuntu/deploy.sh
 ```
 
-脚本会自动完成：
-- ✅ 检查系统环境（Python、espeak）
-- ✅ **交互式选择端口**（1024-65535）
-- ✅ 创建 Python 虚拟环境
-- ✅ 安装所有依赖
-- ✅ 配置 systemd 服务
-- ✅ 启动服务
-
-### 3. 访问应用
-
-部署完成后，根据提示的端口访问：
-- Web 界面：`http://你的服务器IP:端口`
-- API 接口：`http://你的服务器IP:端口/api/speech`
-- 健康检查：`http://你的服务器IP:端口/health`
-
----
-
-## 手动部署
-
-如果不想使用自动部署脚本，可以按以下步骤手动部署。
-
-### 1. 安装系统依赖
-
-```bash
-sudo apt update
-sudo apt install -y python3 python3-pip python3-venv espeak libespeak-dev
-```
-
-### 2. 创建虚拟环境
-
-```bash
-cd flask-text2speech-pyttsx3
-python3 -m venv venv
-source venv/bin/activate
-pip install --upgrade pip
-pip install -r requirements.txt
-```
-
-### 3. 启动应用
-
-```bash
-# 指定端口启动（例如 8080）
-python app.py 8080
-```
-
-### 4. 配置 systemd 服务（可选）
-
-创建服务文件：
-
-```bash
-sudo nano /etc/systemd/system/flask-tts.service
-```
-
-写入以下内容（替换 `<用户>`、`<项目路径>`、`<端口>`）：
-
-```ini
-[Unit]
-Description=Flask Text-to-Speech Application
-After=network.target
-
-[Service]
-Type=simple
-User=<用户>
-Group=<用户>
-WorkingDirectory=<项目路径>
-Environment="PATH=<项目路径>/venv/bin"
-ExecStart=<项目路径>/venv/bin/python app.py <端口>
-Restart=always
-RestartSec=5
-
-[Install]
-WantedBy=multi-user.target
-```
-
-启用并启动服务：
-
-```bash
-sudo systemctl daemon-reload
-sudo systemctl enable flask-tts
-sudo systemctl start flask-tts
-```
+脚本会自动完成环境检查、虚拟环境创建、依赖安装和服务配置。
 
 ---
 
@@ -159,6 +151,13 @@ journalctl -u flask-tts -n 100
    sudo systemctl restart flask-tts
    ```
 
+### 查看可用音色
+
+```bash
+source venv/bin/activate
+python list_voices.py
+```
+
 ---
 
 ## Nginx 反向代理（可选）
@@ -183,6 +182,8 @@ sudo nano /etc/nginx/sites-available/flask-tts
 server {
     listen 80;
     server_name 你的域名或IP;
+
+    client_max_body_size 10M;
 
     location / {
         proxy_pass http://127.0.0.1:<端口>;
@@ -215,14 +216,7 @@ sudo certbot --nginx -d 你的域名
 
 ## 常见问题
 
-### Q1: 部署脚本报错"权限不足"
-
-**解决**：使用 `bash` 命令运行，不要直接 `./deploy.sh`：
-```bash
-bash deploy/ubuntu/deploy.sh
-```
-
-### Q2: 服务启动失败
+### Q1: 服务启动失败
 
 **查看日志**：
 ```bash
@@ -234,26 +228,40 @@ journalctl -u flask-tts -e
 - espeak 未安装：`sudo apt install espeak libespeak-dev`
 - 依赖未安装：`source venv/bin/activate && pip install -r requirements.txt`
 
-### Q3: 中文语音乱码
+### Q2: 中文语音乱码
 
 确保系统安装了中文字体：
 ```bash
 sudo apt install -y fonts-wqy-zenhei fonts-wqy-microhei
 ```
 
-### Q4: 防火墙阻止访问
+### Q3: 防火墙阻止访问
 
 如果使用 UFW 防火墙，放行端口：
 ```bash
 sudo ufw allow <端口>/tcp
 ```
 
-### Q5: 如何查看可用音色
+### Q4: 部署脚本报错"权限不足"
 
+**解决**：使用 `bash` 命令运行：
 ```bash
-source venv/bin/activate
-python list_voices.py
+bash deploy.sh
 ```
+
+### Q5: 如何更新应用代码
+
+1. 停止服务：
+   ```bash
+   sudo systemctl stop flask-tts
+   ```
+
+2. 替换 `app.py` 和 `templates/index.html`
+
+3. 重启服务：
+   ```bash
+   sudo systemctl start flask-tts
+   ```
 
 ---
 
@@ -269,5 +277,5 @@ sudo rm /etc/systemd/system/flask-tts.service
 sudo systemctl daemon-reload
 
 # 删除项目目录
-rm -rf flask-text2speech-pyttsx3
+rm -rf flask-tts-ubuntu
 ```

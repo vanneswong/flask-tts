@@ -240,6 +240,36 @@ docker-compose up -d
 
 ---
 
+## Ubuntu 部署
+
+### 方式一：使用自包含部署包（推荐）
+
+打包部署包：
+```bash
+bash deploy/ubuntu/package.sh
+```
+
+上传到服务器后解压并运行：
+```bash
+tar -xzf flask-tts-ubuntu.tar.gz
+cd flask-tts-ubuntu
+bash deploy.sh
+```
+
+### 方式二：使用 Git 克隆
+
+```bash
+git clone <仓库地址>
+cd flask-text2speech-pyttsx3
+bash deploy/ubuntu/deploy.sh
+```
+
+部署脚本会自动完成：环境检查、**端口选择**、虚拟环境创建、依赖安装、systemd 服务配置。
+
+> 📖 详细文档见 [deploy/ubuntu/README.md](deploy/ubuntu/README.md)
+
+---
+
 ## 配置说明
 
 ### 当前可配置项

@@ -196,6 +196,8 @@ server {
     listen 80;
     server_name 你的域名或IP;
 
+    client_max_body_size 10M;
+
     location / {
         proxy_pass http://127.0.0.1:<端口>;
         proxy_set_header Host $host;
