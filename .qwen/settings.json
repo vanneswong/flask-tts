@@ -12,7 +12,8 @@
       "Bash(git commit *)",
       "Bash(timeout *)",
       "Bash(netstat *)",
-      "Bash(start *)"
+      "Bash(start *)",
+      "Bash(reg *)"
     ]
   },
   "$version": 3

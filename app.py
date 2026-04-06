@@ -147,5 +147,12 @@ def index():
 
 
 if __name__ == '__main__':
-    logger.info("Starting Flask Text-to-Speech application on port 5001")
-    app.run(host='0.0.0.0', port=5001)
+    import argparse
+    
+    parser = argparse.ArgumentParser(description='Flask Text-to-Speech Application')
+    parser.add_argument('port', type=int, nargs='?', default=5001,
+                        help='Port to run the server on (default: 5001)')
+    args = parser.parse_args()
+    
+    logger.info(f"Starting Flask Text-to-Speech application on port {args.port}")
+    app.run(host='0.0.0.0', port=args.port)
