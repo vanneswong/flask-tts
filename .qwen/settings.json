@@ -8,7 +8,11 @@
       "Bash(dir *)",
       "Bash(taskkill *)",
       "Bash(git init)",
-      "Bash(git add *)"
+      "Bash(git add *)",
+      "Bash(git commit *)",
+      "Bash(timeout *)",
+      "Bash(netstat *)",
+      "Bash(start *)"
     ]
   },
   "$version": 3

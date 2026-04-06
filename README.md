@@ -52,12 +52,12 @@
 
 | 层级 | 技术 | 版本 |
 |------|------|------|
-| **后端框架** | Flask | 2.3.2 |
-| **TTS 引擎** | pyttsx3 | 2.98 |
+| **后端框架** | Flask | 3.1.2 |
+| **TTS 引擎** | pyttsx3 | 2.99 |
 | **前端样式** | Tailwind CSS | CDN |
-| **Python** | Python | 3.9+ |
+| **Python** | Python | 3.12+ |
 | **系统依赖 (Linux)** | espeak, libespeak-dev | - |
-| **容器化** | Docker | python:3.9-slim |
+| **容器化** | Docker | python:3.12-slim |
 
 ---
 
@@ -94,7 +94,7 @@ flask-text2speech-pyttsx3/
 
 ### 环境要求
 
-- Python 3.9+
+- Python 3.12+
 - Windows / macOS / Linux
 
 ### 安装依赖
@@ -228,6 +228,15 @@ services:
 ```bash
 docker-compose up -d
 ```
+
+### Dockerfile 特性
+
+| 特性 | 说明 |
+|------|------|
+| **基础镜像** | `python:3.12-slim` (轻量、安全) |
+| **非 root 用户** | 使用 `appuser` 运行，增强安全性 |
+| **健康检查** | 内置 `HEALTHCHECK`，每 30 秒检测 `/health` 接口 |
+| **依赖清理** | `apt-get` 安装后清理缓存，减小镜像体积 |
 
 ---
 
@@ -970,4 +979,5 @@ for v in voices:
 
 | 日期 | 版本 | 说明 |
 |------|------|------|
+| 2026-04-06 | 2.0.0 | 全面优化：输入验证、线程安全、UUID 文件名、文件清理、健康检查、日志、前端体验优化 |
 | 2026-04-06 | 1.0.0 | 初始版本，基础 TTS 功能 |
