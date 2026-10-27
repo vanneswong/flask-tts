@@ -25,18 +25,27 @@
             font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, "PingFang SC", "Microsoft YaHei", sans-serif;
             background: var(--bg);
             color: var(--text);
-            min-height: 100vh;
+            height: 100vh;
+            height: 100dvh;
+            overflow: hidden;
             display: flex;
             flex-direction: column;
             align-items: center;
             justify-content: flex-start;
-            padding: 24px 16px;
+            padding: 20px 16px 14px;
         }
 
-        .container { width: 100%; max-width: 1120px; }
+        .container {
+            width: 100%;
+            max-width: 1120px;
+            height: 100%;
+            min-height: 0;
+            display: flex;
+            flex-direction: column;
+        }
 
         /* Header */
-        .header { text-align: center; margin-bottom: 28px; }
+        .header { text-align: center; margin-bottom: 18px; flex-shrink: 0; }
         .header-icon {
             display: inline-flex;
             align-items: center;
@@ -68,32 +77,97 @@
             border-radius: 20px;
         }
 
-        /* 双栏布局 */
+        /* 双栏布局：撑满剩余高度，各栏内部滚动，页面不因内容过长而变形 */
         .main-layout {
             display: grid;
-            grid-template-columns: 1fr 1fr;
-            gap: 24px;
-            align-items: start;
+            /* minmax(0,1fr) 避免轨道被内部固有宽度（如 textarea/不换行文本）撑破 */
+            grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+            gap: 20px;
+            align-items: stretch;
+            flex: 1;
+            min-height: 0;
         }
-        .col-right { display: flex; flex-direction: column; gap: 20px; }
+        .col-left, .col-right {
+            display: flex;
+            flex-direction: column;
+            gap: 16px;
+            min-height: 0;
+            min-width: 0;
+        }
 
         /* Card */
         .card {
             background: var(--card);
             border-radius: var(--radius);
             box-shadow: var(--shadow);
-            padding: 24px;
+            padding: 22px;
             border: 1px solid var(--border);
+            min-height: 0;
+        }
+
+        /* 左栏表单卡片：撑满高度，文本框自适应 */
+        .card-form {
+            flex: 1;
+            display: flex;
+            flex-direction: column;
+            min-height: 0;
+        }
+        .form-group-grow {
+            flex: 1;
+            display: flex;
+            flex-direction: column;
+            min-height: 0;
+        }
+        .form-group-grow .textarea {
+            flex: 1;
+            min-height: 96px;
+            resize: none;
+        }
+
+        /* 右栏：预览固定高度，历史列表内部滚动 */
+        .preview-card {
+            flex-shrink: 0;
+            display: flex;
+            flex-direction: column;
+        }
+        .card-history {
+            flex: 1;
+            display: flex;
+            flex-direction: column;
+            min-height: 0;
         }
 
         .section-title {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            gap: 8px;
             font-size: 13px;
             font-weight: 700;
             color: var(--text-secondary);
             text-transform: uppercase;
             letter-spacing: 0.04em;
             margin-bottom: 12px;
+            flex-shrink: 0;
         }
+        .title-count {
+            font-size: 11px;
+            font-weight: 600;
+            color: var(--primary);
+            background: #eef2ff;
+            border-radius: 20px;
+            padding: 2px 9px;
+            text-transform: none;
+            letter-spacing: 0;
+        }
+        .title-count:empty { display: none; }
+        .title-main {
+            display: inline-flex;
+            align-items: center;
+            gap: 7px;
+        }
+        .title-main svg { width: 15px; height: 15px; flex-shrink: 0; }
+        .badge svg { width: 13px; height: 13px; flex-shrink: 0; }
 
         /* Form */
         .form-group { margin-bottom: 20px; }
@@ -284,9 +358,21 @@
             display: flex;
             flex-direction: column;
             gap: 10px;
-            max-height: 440px;
+            flex: 1;
+            min-height: 0;
             overflow-y: auto;
+            overscroll-behavior: contain;
+            padding-right: 4px;
+            margin-right: -4px;
         }
+        /* 细滚动条 */
+        .history-list::-webkit-scrollbar { width: 6px; }
+        .history-list::-webkit-scrollbar-track { background: transparent; }
+        .history-list::-webkit-scrollbar-thumb {
+            background: #cbd5e1;
+            border-radius: 3px;
+        }
+        .history-list::-webkit-scrollbar-thumb:hover { background: #94a3b8; }
         .history-empty {
             font-size: 13px;
             color: #94a3b8;
@@ -302,9 +388,9 @@
             border: 1px solid var(--border);
             border-radius: 12px;
             cursor: pointer;
-            transition: border-color .2s, background .2s;
+            transition: border-color .2s, background .2s, transform .2s;
         }
-        .history-item:hover { border-color: var(--primary); background: #f8f9ff; }
+        .history-item:hover { border-color: var(--primary); background: #f8f9ff; transform: translateX(2px); }
         .history-item.active { border-color: var(--primary); background: #eef2ff; }
         .history-item .play-icon {
             display: inline-flex;
@@ -370,11 +456,12 @@
 
         /* Footer */
         .footer {
-            margin-top: 36px;
+            margin-top: 14px;
             text-align: center;
             font-size: 12px;
             color: var(--text-secondary);
-            line-height: 1.8;
+            line-height: 1.6;
+            flex-shrink: 0;
         }
 
         /* Spinner */
@@ -389,15 +476,35 @@
         }
 
         /* Responsive */
+        @media (max-height: 720px) and (min-width: 901px) {
+            .header p,
+            .badge { display: none; }
+            .header { margin-bottom: 12px; }
+            .header-icon { width: 44px; height: 44px; border-radius: 13px; margin-bottom: 8px; }
+            .header-icon svg { width: 22px; height: 22px; }
+            .header h1 { font-size: 20px; }
+        }
         @media (max-width: 900px) {
-            .main-layout { grid-template-columns: 1fr; }
+            /* 窄屏恢复自然文档流，整页滚动 */
+            body {
+                height: auto;
+                min-height: 100dvh;
+                overflow: auto;
+                padding: 20px 16px;
+            }
+            .container { height: auto; }
+            .main-layout { grid-template-columns: minmax(0, 1fr); }
+            .card-form { min-height: 400px; }
+            .card-history { min-height: 280px; }
+            .history-list { max-height: 380px; }
         }
         @media (max-width: 480px) {
             body { padding: 16px 12px; }
-            .card { padding: 20px 16px; }
-            .header { margin-bottom: 24px; }
+            .card { padding: 18px 16px; }
+            .header { margin-bottom: 18px; }
             .header h1 { font-size: 20px; }
             .actions { flex-direction: column; }
+            .card-form { min-height: 380px; }
         }
     </style>
 </head>
@@ -410,15 +517,18 @@
             </div>
             <h1>文本转语音</h1>
             <p>输入文字，即刻生成自然语音</p>
-            <div class="badge">⚡ Piper 神经网络语音引擎 · 完全离线</div>
+            <div class="badge">
+                <svg viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><path d="M13 2 3 14h7l-1 8 10-12h-7l1-8z"/></svg>
+                Piper 神经网络语音引擎 · 完全离线
+            </div>
         </div>
 
         <!-- 双栏主体 -->
         <div class="main-layout">
             <!-- 左栏：输入表单 -->
             <div class="col-left">
-                <div class="card">
-                    <div class="form-group">
+                <div class="card card-form">
+                    <div class="form-group form-group-grow">
                         <label class="form-label" for="text">
                             <span>输入文本</span>
                             <span class="hint">支持中英文</span>
@@ -473,7 +583,12 @@
             <!-- 右栏：播放预览 + 历史列表 -->
             <div class="col-right">
                 <div class="card preview-card">
-                    <div class="section-title">🎧 播放预览</div>
+                    <div class="section-title">
+                        <span class="title-main">
+                            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M3 18v-6a9 9 0 0 1 18 0v6"/><path d="M21 19a2 2 0 0 1-2 2h-1a2 2 0 0 1-2-2v-3a2 2 0 0 1 2-2h3zM3 19a2 2 0 0 0 2 2h1a2 2 0 0 0 2-2v-3a2 2 0 0 0-2-2H3z"/></svg>
+                            播放预览
+                        </span>
+                    </div>
                     <div id="previewEmpty" class="preview-empty">尚未生成语音，输入文字后点击转换</div>
                     <audio id="audio" controls style="display:none;"></audio>
                     <div class="preview-meta" id="previewMeta"></div>
@@ -483,8 +598,14 @@
                     </a>
                 </div>
 
-                <div class="card">
-                    <div class="section-title">📋 已生成的语音</div>
+                <div class="card card-history">
+                    <div class="section-title">
+                        <span class="title-main">
+                            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><line x1="8" y1="6" x2="21" y2="6"/><line x1="8" y1="12" x2="21" y2="12"/><line x1="8" y1="18" x2="21" y2="18"/><circle cx="4" cy="6" r="1"/><circle cx="4" cy="12" r="1"/><circle cx="4" cy="18" r="1"/></svg>
+                            已生成的语音
+                        </span>
+                        <span class="title-count" id="historyCount"></span>
+                    </div>
                     <div id="historyList" class="history-list">
                         <div class="history-empty">加载中...</div>
                     </div>
@@ -511,6 +632,7 @@
         const previewEmptyEl = $('previewEmpty');
         const previewMetaEl = $('previewMeta');
         const historyListEl = $('historyList');
+        const historyCountEl = $('historyCount');
         const toastEl = $('toast');
         const speedEl = $('speed');
         const speedValueEl = $('speedValue');
@@ -600,6 +722,7 @@
 
         function renderHistory(items) {
             currentItems = items || [];
+            historyCountEl.textContent = currentItems.length ? `${currentItems.length} 条` : '';
             if (!currentItems.length) {
                 historyListEl.innerHTML = '<div class="history-empty">暂无生成的语音</div>';
                 return;
@@ -688,7 +811,7 @@
                         size: 0,
                         created_at: Date.now() / 1000
                     });
-                    showToast(`✅ 语音生成成功${data.elapsed_ms ? `（${data.elapsed_ms} ms）` : ''}`);
+                    showToast(`语音生成成功${data.elapsed_ms ? `（${data.elapsed_ms} ms）` : ''}`);
                 } else {
                     showToast(data.error || '转换失败，请重试', true);
                 }

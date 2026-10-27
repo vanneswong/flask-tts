@@ -2,7 +2,7 @@
 
 > 基于 Flask + [Piper](https://github.com/rhasspy/piper) 的**离线神经网络**文本转语音 Web 应用
 
-当前版本：**v0.2.0**（引擎已由 pyttsx3 迁移至 Piper，旧实现见 `pyttsx3` 分支）
+当前版本：**v0.2.1**（引擎已由 pyttsx3 迁移至 Piper，旧实现见 `pyttsx3` 分支）
 
 ---
 
@@ -271,7 +271,7 @@ docker run -d -p 5001:5001 \
 {
   "status": "healthy",
   "engine": "piper",
-  "version": "0.2.0",
+  "version": "0.2.1",
   "available_voices": 2,
   "voices": ["zh_CN-huayan-medium", "en_US-lessac-medium"]
 }

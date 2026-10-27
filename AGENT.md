@@ -5,7 +5,7 @@
 基于 Flask + **Piper** 的离线神经网络文本转语音（TTS）Web 应用。
 提供 Web 界面与 REST API，将文本合成为 WAV 音频并支持在线播放、下载与历史查看。
 
-**版本**：v0.2.0（引擎已从 pyttsx3 迁移到 Piper；pyttsx3 实现保留在 `pyttsx3` 分支）
+**版本**：v0.2.1（引擎已从 pyttsx3 迁移到 Piper；pyttsx3 实现保留在 `pyttsx3` 分支）
 
 ## 技术栈
 

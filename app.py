@@ -24,7 +24,7 @@ logging.basicConfig(
 logger = logging.getLogger(__name__)
 
 # 应用版本号
-APP_VERSION = "0.2.0"
+APP_VERSION = "0.2.1"
 
 # 最大文本长度限制
 MAX_TEXT_LENGTH = int(os.environ.get("MAX_TEXT_LENGTH", "5000"))
