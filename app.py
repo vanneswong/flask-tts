@@ -5,6 +5,7 @@ import time
 import uuid
 import threading
 import logging
+import json
 from pathlib import Path
 
 # 配置日志
@@ -16,9 +17,9 @@ logging.basicConfig(
 logger = logging.getLogger(__name__)
 
 app = Flask(__name__, static_url_path='/static')
-app.config['UPLOAD_FOLDER'] = 'static/mp3'
+app.config['UPLOAD_FOLDER'] = 'static/audio'
 
-# 确保mp3文件夹存在
+# 确保audio文件夹存在
 if not os.path.exists(app.config['UPLOAD_FOLDER']):
     os.makedirs(app.config['UPLOAD_FOLDER'])
 
@@ -34,6 +35,9 @@ MAX_TEXT_LENGTH = 5000
 # 文件保留时长（小时）
 FILE_MAX_AGE_HOURS = 24
 
+# 应用版本号
+APP_VERSION = '0.1.0'
+
 
 def cleanup_old_files(max_age_hours=24):
     """清理超过指定小时的旧文件"""
@@ -45,9 +49,13 @@ def cleanup_old_files(max_age_hours=24):
     cutoff = now - (max_age_hours * 3600)
     cleaned = 0
 
-    for file in folder.glob('*.mp3'):
+    for file in folder.glob('*.wav'):
         if file.stat().st_mtime < cutoff:
             file.unlink()
+            # 同时清理对应的元数据文件
+            meta = file.with_suffix('.json')
+            if meta.exists():
+                meta.unlink()
             cleaned += 1
 
     if cleaned > 0:
@@ -79,18 +87,20 @@ def api_speech():
                 f'ip={request.remote_addr}')
 
     # 使用 UUID 生成唯一文件名，避免并发冲突
-    filename = f"api_{uuid.uuid4().hex[:8]}.mp3"
+    filename = f"api_{uuid.uuid4().hex[:8]}.wav"
     filepath = os.path.join(app.config['UPLOAD_FOLDER'], filename)
 
     # 使用线程锁保护引擎调用
+    voice_name = '默认语音'
     with engine_lock:
-        # 根据音色索引设置语音
+        # 根据音色索引设置语音（与前端一致：使用过滤后的中英文音色列表）
         if voice_id is not None:
-            voices = engine.getProperty('voices')
+            voices = _filter_voices(engine.getProperty('voices'))
             try:
                 voice_idx = int(voice_id)
                 if 0 <= voice_idx < len(voices):
                     engine.setProperty('voice', voices[voice_idx].id)
+                    voice_name = voices[voice_idx].name
             except (ValueError, TypeError):
                 pass  # 音色参数无效时使用默认语音
 
@@ -122,10 +132,22 @@ def api_speech():
                 'error': '语音生成失败'
             }), 500
 
+    # 保存元数据（用于历史列表展示）
+    meta_path = os.path.splitext(filepath)[0] + '.json'
+    try:
+        with open(meta_path, 'w', encoding='utf-8') as f:
+            json.dump({
+                'text': text,
+                'voice': voice_name,
+                'created_at': time.time()
+            }, f, ensure_ascii=False)
+    except Exception as e:
+        logger.warning(f'Failed to save metadata: {e}')
+
     logger.info(f'Speech generated successfully: {filename}')
     return jsonify({
         'status': 'success',
-        'url': f"/static/mp3/{filename}"
+        'url': f"/static/audio/{filename}"
     })
 
 def _filter_voices(voices):
@@ -159,12 +181,45 @@ def health():
     })
 
 
+@app.route('/api/audio')
+def api_audio_list():
+    """返回已生成的语音文件列表（用于前端历史列表）"""
+    folder = Path(app.config['UPLOAD_FOLDER'])
+    items = []
+    if folder.exists():
+        for f in folder.glob('*.wav'):
+            meta = {}
+            meta_file = f.with_suffix('.json')
+            if meta_file.exists():
+                try:
+                    meta = json.loads(meta_file.read_text(encoding='utf-8'))
+                except Exception:
+                    meta = {}
+            try:
+                stat = f.stat()
+                items.append({
+                    'filename': f.name,
+                    'url': f"/static/audio/{f.name}",
+                    'size': stat.st_size,
+                    'mtime': stat.st_mtime,
+                    'text': meta.get('text', ''),
+                    'voice': meta.get('voice', ''),
+                    'created_at': meta.get('created_at', stat.st_mtime)
+                })
+            except OSError:
+                continue
+
+    # 按创建时间倒序排列（最新的在前）
+    items.sort(key=lambda x: x.get('created_at', 0), reverse=True)
+    return jsonify({'status': 'success', 'items': items})
+
+
 @app.route('/')
 def index():
     """主页"""
     all_voices = engine.getProperty('voices')
     voices = _filter_voices(all_voices)
-    return render_template('index.html', voices=voices)
+    return render_template('index.html', voices=voices, version=APP_VERSION)
 
 
 if __name__ == '__main__':

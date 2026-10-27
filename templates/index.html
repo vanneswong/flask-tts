@@ -35,7 +35,7 @@
 
         .container {
             width: 100%;
-            max-width: 560px;
+            max-width: 1120px;
         }
 
         /* Header */
@@ -65,6 +65,19 @@
             color: var(--text-secondary);
         }
 
+        /* 双栏布局 */
+        .main-layout {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 24px;
+            align-items: start;
+        }
+        .col-right {
+            display: flex;
+            flex-direction: column;
+            gap: 20px;
+        }
+
         /* Card */
         .card {
             background: var(--card);
@@ -72,6 +85,16 @@
             box-shadow: var(--shadow);
             padding: 24px;
             border: 1px solid var(--border);
+        }
+
+        /* Section Title */
+        .section-title {
+            font-size: 13px;
+            font-weight: 700;
+            color: var(--text-secondary);
+            text-transform: uppercase;
+            letter-spacing: 0.04em;
+            margin-bottom: 12px;
         }
 
         /* Form Group */
@@ -89,7 +112,7 @@
         /* Textarea */
         .textarea {
             width: 100%;
-            min-height: 120px;
+            min-height: 140px;
             padding: 14px 16px;
             font-size: 15px;
             line-height: 1.6;
@@ -203,42 +226,111 @@
             opacity: .5;
             cursor: not-allowed;
         }
-        .btn-secondary {
+        .btn-download {
+            width: 100%;
             background: var(--bg);
             color: var(--text);
             border: 1.5px solid var(--border);
-            padding: 14px 16px;
+            padding: 12px 16px;
+            margin-top: 12px;
         }
-        .btn-secondary:hover:not(:disabled) {
+        .btn-download:hover {
             border-color: var(--primary);
             color: var(--primary);
         }
-        .btn-secondary:disabled {
-            opacity: .4;
-            cursor: not-allowed;
-        }
 
-        /* Audio Player */
-        .player {
-            margin-top: 20px;
-            padding: 16px;
-            background: var(--bg);
-            border-radius: 12px;
-            border: 1px solid var(--border);
-            display: none;
-        }
-        .player.show { display: block; }
-        .player audio {
+        /* Preview Player */
+        .preview-card audio {
             width: 100%;
             height: 40px;
             outline: none;
+            border-radius: 8px;
         }
-        .player-label {
-            font-size: 12px;
+        .preview-empty {
+            font-size: 13px;
+            color: #94a3b8;
+            text-align: center;
+            padding: 12px 0;
+        }
+
+        /* History List */
+        .history-list {
+            display: flex;
+            flex-direction: column;
+            gap: 10px;
+            max-height: 520px;
+            overflow-y: auto;
+        }
+        .history-empty {
+            font-size: 13px;
+            color: #94a3b8;
+            text-align: center;
+            padding: 24px 0;
+        }
+        .history-item {
+            display: flex;
+            align-items: center;
+            gap: 12px;
+            padding: 12px 14px;
+            background: var(--bg);
+            border: 1px solid var(--border);
+            border-radius: 12px;
+            cursor: pointer;
+            transition: border-color .2s, background .2s;
+        }
+        .history-item:hover {
+            border-color: var(--primary);
+            background: #f8f9ff;
+        }
+        .history-item.active {
+            border-color: var(--primary);
+            background: #eef2ff;
+        }
+        .history-item .play-icon {
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
+            width: 36px;
+            height: 36px;
+            border-radius: 50%;
+            background: var(--primary);
+            color: #fff;
+            flex-shrink: 0;
+        }
+        .history-item .play-icon svg { width: 16px; height: 16px; }
+        .history-item .item-info {
+            flex: 1;
+            min-width: 0;
+        }
+        .history-item .item-text {
+            font-size: 13px;
+            font-weight: 600;
+            color: var(--text);
+            white-space: nowrap;
+            overflow: hidden;
+            text-overflow: ellipsis;
+        }
+        .history-item .item-meta {
+            font-size: 11px;
             color: var(--text-secondary);
-            margin-bottom: 8px;
-            font-weight: 500;
+            margin-top: 3px;
+            white-space: nowrap;
+            overflow: hidden;
+            text-overflow: ellipsis;
         }
+        .history-item .item-download {
+            color: var(--text-secondary);
+            flex-shrink: 0;
+            display: inline-flex;
+            padding: 6px;
+            border-radius: 8px;
+            transition: color .2s, background .2s;
+        }
+        .history-item .item-download:hover {
+            color: var(--primary);
+            background: rgba(99,102,241,.1);
+        }
+        .history-item .item-download svg { width: 16px; height: 16px; }
 
         /* Toast */
         .toast {
@@ -289,13 +381,17 @@
         }
 
         /* Responsive */
+        @media (max-width: 900px) {
+            .main-layout {
+                grid-template-columns: 1fr;
+            }
+        }
         @media (max-width: 480px) {
             body { padding: 16px 12px; }
             .card { padding: 20px 16px; }
             .header { margin-bottom: 24px; }
             .header h1 { font-size: 20px; }
             .actions { flex-direction: column; }
-            .btn-secondary { flex-direction: row; }
         }
     </style>
 </head>
@@ -310,63 +406,79 @@
             <p>输入文字，即刻生成语音</p>
         </div>
 
-        <!-- Card -->
-        <div class="card">
-            <div class="form-group">
-                <label class="form-label" for="text">输入文本</label>
-                <textarea id="text" class="textarea" placeholder="请输入要转换的文字..." maxlength="5000"></textarea>
-                <div class="char-count" id="charCount">0 / 5000</div>
-            </div>
+        <!-- 双栏主体 -->
+        <div class="main-layout">
+            <!-- 左栏：输入表单 -->
+            <div class="col-left">
+                <div class="card">
+                    <div class="form-group">
+                        <label class="form-label" for="text">输入文本</label>
+                        <textarea id="text" class="textarea" placeholder="请输入要转换的文字..." maxlength="5000"></textarea>
+                        <div class="char-count" id="charCount">0 / 5000</div>
+                    </div>
 
-            <div class="form-group">
-                <label class="form-label" for="voice">选择音色</label>
-                <div class="select-wrapper">
-                    <select id="voice" class="select">
-                        {% for voice in voices %}
-                        <option value="{{ loop.index0 }}">
-                            {{ voice.name }}
-                            {% if 'ZH-CN' in voice.id or 'zh' in voice.id|lower %}
-                                · 中文
-                            {% elif 'EN-US' in voice.id or 'en' in voice.id|lower %}
-                                · 英文
-                            {% else %}
-                                · {{ voice.languages[0] if voice.languages else '未知' }}
-                            {% endif %}
-                        </option>
-                        {% endfor %}
-                    </select>
+                    <div class="form-group">
+                        <label class="form-label" for="voice">选择音色</label>
+                        <div class="select-wrapper">
+                            <select id="voice" class="select">
+                                {% for voice in voices %}
+                                <option value="{{ loop.index0 }}">
+                                    {{ voice.name }}
+                                    {% if 'ZH-CN' in voice.id or 'zh' in voice.id|lower %}
+                                        · 中文
+                                    {% elif 'EN-US' in voice.id or 'en' in voice.id|lower %}
+                                        · 英文
+                                    {% else %}
+                                        · {{ voice.languages[0] if voice.languages else '未知' }}
+                                    {% endif %}
+                                </option>
+                                {% endfor %}
+                            </select>
+                        </div>
+                        <div class="voice-tags">
+                            {% for voice in voices %}
+                            <span class="voice-tag">
+                                {% if 'ZH-CN' in voice.id or 'zh' in voice.id|lower %}🇨🇳{% elif 'EN-US' in voice.id or 'en' in voice.id|lower %}🇺🇸{% else %}🌐{% endif %}
+                                {{ voice.name.split('(')[-1].rstrip(')') if '(' in voice.name else voice.name }}
+                            </span>
+                            {% endfor %}
+                        </div>
+                    </div>
+
+                    <!-- Actions -->
+                    <div class="actions">
+                        <button id="convert" class="btn btn-primary">
+                            <svg id="btnIcon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polygon points="5 3 19 12 5 21 5 3"/></svg>
+                            <span id="btnText">转换为语音</span>
+                        </button>
+                    </div>
                 </div>
-                <div class="voice-tags">
-                    {% for voice in voices %}
-                    <span class="voice-tag">
-                        {% if 'ZH-CN' in voice.id or 'zh' in voice.id|lower %}🇨🇳{% elif 'EN-US' in voice.id or 'en' in voice.id|lower %}🇺🇸{% else %}🌐{% endif %}
-                        {{ voice.name.split('(')[-1].rstrip(')') if '(' in voice.name else voice.name }}
-                    </span>
-                    {% endfor %}
+            </div>
+
+            <!-- 右栏：播放预览 + 历史列表 -->
+            <div class="col-right">
+                <div class="card preview-card">
+                    <div class="section-title">🎧 播放预览</div>
+                    <div id="previewEmpty" class="preview-empty">尚未生成语音，输入文字后点击转换</div>
+                    <audio id="audio" controls style="display:none;"></audio>
+                    <a id="download" class="btn btn-download" download style="display:none;">
+                        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>
+                        下载当前音频
+                    </a>
                 </div>
-            </div>
 
-            <!-- Actions -->
-            <div class="actions">
-                <button id="convert" class="btn btn-primary">
-                    <svg id="btnIcon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polygon points="5 3 19 12 5 21 5 3"/></svg>
-                    <span id="btnText">转换为语音</span>
-                </button>
-                <a id="download" class="btn btn-secondary" download title="下载语音文件">
-                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>
-                </a>
-            </div>
-
-            <!-- Player -->
-            <div class="player" id="player">
-                <div class="player-label">🎧 播放预览</div>
-                <audio id="audio" controls></audio>
+                <div class="card">
+                    <div class="section-title">📋 已生成的语音</div>
+                    <div id="historyList" class="history-list">
+                        <div class="history-empty">加载中...</div>
+                    </div>
+                </div>
             </div>
         </div>
 
         <!-- Footer -->
         <div class="footer">
-            Powered by pyttsx3 · 离线合成 · 即时可用
+            Powered by pyttsx3 · 离线合成 · 即时可用 · v{{ version }}
         </div>
     </div>
 
@@ -379,12 +491,23 @@
         const charCountEl = $('charCount');
         const convertBtn = $('convert');
         const btnText = $('btnText');
-        const btnIcon = $('btnIcon');
         const downloadEl = $('download');
         const audioEl = $('audio');
-        const playerEl = $('player');
+        const previewEmptyEl = $('previewEmpty');
+        const historyListEl = $('historyList');
         const toastEl = $('toast');
         const MAX_LEN = 5000;
+
+        const ICON_PLAY = '<svg id="btnIcon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polygon points="5 3 19 12 5 21 5 3"/></svg>';
+        const ICON_SPIN = '<div class="spinner" id="btnIcon"></div>';
+
+        // 设置按钮加载状态（每次重新查询 DOM，避免引用失效导致转圈不消失）
+        function setBtnLoading(loading) {
+            convertBtn.disabled = loading;
+            btnText.textContent = loading ? '生成中...' : '转换为语音';
+            const icon = $('btnIcon');
+            if (icon) icon.outerHTML = loading ? ICON_SPIN : ICON_PLAY;
+        }
 
         // 字符计数
         textEl.addEventListener('input', () => {
@@ -397,11 +520,110 @@
         function showToast(msg, isError = false) {
             toastEl.textContent = msg;
             toastEl.className = 'toast' + (isError ? ' error' : '');
-            // 触发重绘
             void toastEl.offsetWidth;
             toastEl.classList.add('show');
             setTimeout(() => toastEl.classList.remove('show'), 3000);
         }
+
+        // 格式化时间
+        function formatTime(ts) {
+            if (!ts) return '';
+            const d = new Date(ts * 1000);
+            const now = new Date();
+            const diff = Math.floor((now - d) / 1000);
+            if (diff < 60) return '刚刚';
+            if (diff < 3600) return `${Math.floor(diff / 60)} 分钟前`;
+            if (diff < 86400) return `${Math.floor(diff / 3600)} 小时前`;
+            const pad = n => String(n).padStart(2, '0');
+            return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())} ${pad(d.getHours())}:${pad(d.getMinutes())}`;
+        }
+
+        // 格式化文件大小
+        function formatSize(bytes) {
+            if (bytes < 1024) return `${bytes} B`;
+            if (bytes < 1024 * 1024) return `${(bytes / 1024).toFixed(1)} KB`;
+            return `${(bytes / 1024 / 1024).toFixed(1)} MB`;
+        }
+
+        // HTML 转义
+        function escapeHtml(s) {
+            return String(s)
+                .replace(/&/g, '&amp;')
+                .replace(/</g, '&lt;')
+                .replace(/>/g, '&gt;')
+                .replace(/"/g, '&quot;')
+                .replace(/'/g, '&#39;');
+        }
+
+        // 当前历史列表数据
+        let currentItems = [];
+
+        // 播放音频（更新预览区）
+        function playAudio(item) {
+            audioEl.src = item.url;
+            audioEl.style.display = 'block';
+            previewEmptyEl.style.display = 'none';
+            downloadEl.href = item.url;
+            downloadEl.style.display = 'inline-flex';
+            audioEl.play().catch(() => {});
+            // 高亮当前项
+            document.querySelectorAll('.history-item').forEach(el => {
+                const idx = parseInt(el.dataset.index, 10);
+                el.classList.toggle('active', currentItems[idx] && currentItems[idx].url === item.url);
+            });
+        }
+
+        // 渲染历史列表
+        function renderHistory(items) {
+            currentItems = items || [];
+            if (!currentItems.length) {
+                historyListEl.innerHTML = '<div class="history-empty">暂无生成的语音</div>';
+                return;
+            }
+            historyListEl.innerHTML = currentItems.map((item, idx) => {
+                const text = escapeHtml(item.text || item.filename);
+                const voice = item.voice ? item.voice.split('(').pop().replace(')', '') : '';
+                return `
+                <div class="history-item" data-index="${idx}">
+                    <span class="play-icon">
+                        <svg viewBox="0 0 24 24" fill="currentColor"><polygon points="5 3 19 12 5 21 5 3"/></svg>
+                    </span>
+                    <div class="item-info">
+                        <div class="item-text">${text}</div>
+                        <div class="item-meta">${escapeHtml(voice ? voice + ' · ' : '')}${formatTime(item.created_at)} · ${formatSize(item.size)}</div>
+                    </div>
+                    <a class="item-download" href="${item.url}" download title="下载">
+                        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>
+                    </a>
+                </div>`;
+            }).join('');
+        }
+
+        // 加载历史列表
+        async function loadHistory() {
+            try {
+                const res = await fetch('/api/audio');
+                const data = await res.json();
+                if (data.status === 'success') {
+                    renderHistory(data.items || []);
+                } else {
+                    historyListEl.innerHTML = '<div class="history-empty">加载失败</div>';
+                }
+            } catch (err) {
+                console.error('Error loading history:', err);
+                historyListEl.innerHTML = '<div class="history-empty">加载失败</div>';
+            }
+        }
+
+        // 历史列表点击事件（事件委托，避免内联脚本注入问题）
+        historyListEl.addEventListener('click', (e) => {
+            if (e.target.closest('.item-download')) return; // 下载链接走默认行为
+            const itemEl = e.target.closest('.history-item');
+            if (!itemEl) return;
+            const idx = parseInt(itemEl.dataset.index, 10);
+            const item = currentItems[idx];
+            if (item) playAudio(item);
+        });
 
         // 转换
         convertBtn.addEventListener('click', async () => {
@@ -413,12 +635,7 @@
                 return;
             }
 
-            // 加载中
-            convertBtn.disabled = true;
-            btnText.textContent = '生成中...';
-            btnIcon.outerHTML = '<div class="spinner" id="btnIcon"></div>';
-            playerEl.classList.remove('show');
-            downloadEl.style.display = 'none';
+            setBtnLoading(true);
 
             try {
                 const res = await fetch('/api/speech', {
@@ -430,10 +647,15 @@
                 const data = await res.json();
 
                 if (data.status === 'success') {
-                    audioEl.src = data.url;
-                    playerEl.classList.add('show');
-                    downloadEl.href = data.url;
-                    downloadEl.style.display = 'inline-flex';
+                    await loadHistory();
+                    // 找到刚生成的项并播放
+                    const filename = data.url.split('/').pop();
+                    const item = currentItems.find(it => it.filename === filename);
+                    if (item) {
+                        playAudio(item);
+                    } else {
+                        playAudio({ url: data.url, filename, text: text, voice: '', size: 0, created_at: Date.now() / 1000 });
+                    }
                     showToast('✅ 语音生成成功');
                 } else {
                     showToast(data.error || '转换失败，请重试', true);
@@ -442,11 +664,12 @@
                 console.error('Error:', err);
                 showToast('网络错误，请检查连接后重试', true);
             } finally {
-                convertBtn.disabled = false;
-                btnText.textContent = '转换为语音';
-                btnIcon.outerHTML = '<svg id="btnIcon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polygon points="5 3 19 12 5 21 5 3"/></svg>';
+                setBtnLoading(false);
             }
         });
+
+        // 页面加载时读取历史列表
+        loadHistory();
     </script>
 </body>
 </html>

@@ -18,7 +18,10 @@ RUN pip install --no-cache-dir -r requirements.txt
 COPY . .
 
 # 创建语音文件存储目录
-RUN mkdir -p static/mp3
+RUN mkdir -p static/audio
+
+# 声明可挂载的数据卷（用于持久化生成的语音文件）
+VOLUME ["/app/static/audio"]
 
 EXPOSE 5001
 

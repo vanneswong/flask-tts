@@ -22,5 +22,17 @@ ENV/
 .DS_Store
 Thumbs.db
 
-# Generated MP3 files
-static/mp3/*.mp3
+# 生成的语音文件与元数据（持久化数据，不入库）
+static/audio/
+
+# 环境变量与敏感信息
+.env
+.env.*
+*.pem
+*.key
+*.crt
+credentials.json
+secrets.json
+
+# Qwen CLI 本地配置
+.qwen/
