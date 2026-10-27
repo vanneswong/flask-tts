@@ -1,1131 +1,327 @@
-# Flask Text-to-Speech (pyttsx3) 应用
+# Flask Text-to-Speech (Piper) 应用
 
-> 基于 Flask 和 pyttsx3 的离线文本转语音 Web 应用
+> 基于 Flask + [Piper](https://github.com/rhasspy/piper) 的**离线神经网络**文本转语音 Web 应用
 
-## 📋 目录
+当前版本：**v0.2.0**（引擎已由 pyttsx3 迁移至 Piper，旧实现见 `pyttsx3` 分支）
+
+---
+
+## 目录
 
 - [项目概述](#项目概述)
+- [为什么换用 Piper](#为什么换用-piper)
 - [功能特性](#功能特性)
 - [技术栈](#技术栈)
 - [项目结构](#项目结构)
 - [快速开始](#快速开始)
+- [数据持久化](#数据持久化)
+- [添加自定义语音](#添加自定义语音)
 - [API 文档](#api-文档)
-- [Docker 部署](#docker-部署)
 - [配置说明](#配置说明)
-- [已知问题](#已知问题)
-- [优化建议](#优化建议)
-  - [总览表](#优化建议总览表)
-  - [P0 - 必须修复](#p0---必须修复)
-  - [P1 - 强烈建议](#p1---强烈建议)
-  - [P2 - 建议优化](#p2---建议优化)
-  - [完整优化代码参考](#完整优化代码参考)
 - [常见问题](#常见问题)
 
 ---
 
 ## 项目概述
 
-这是一个基于 Flask 框架和 pyttsx3 库的**离线文本转语音**（TTS）Web 应用。它提供了一个简洁的 Web 界面和 RESTful API，允许用户将文本转换为语音文件（MP3 格式），支持在线播放和下载。
+这是一个离线文本转语音（TTS）服务，提供 Web 界面与 RESTful API。
+音频由 **Piper**（基于 ONNX Runtime 的神经网络语音合成引擎）本地生成，
+不依赖任何在线服务，音质远优于 espeak-ng 等共振峰合成器。
 
 **核心优势**：
-- ✅ **离线运行**：无需网络连接，本地即可完成语音合成
-- ✅ **多语言支持**：依赖系统语音引擎，支持中文、英文等多种语言
-- ✅ **轻量部署**：依赖少，支持 Docker 容器化部署
-- ✅ **双接口**：同时提供 Web 界面和 API 接口
+
+- ✅ **完全离线**：模型内置镜像，无需联网即可合成
+- ✅ **音质自然**：神经网络 TTS（VITS 模型），非机械音
+- ✅ **多架构**：同时提供 `linux/amd64` 与 `linux/arm64` 镜像
+- ✅ **数据持久化**：通过 Docker 卷保留音频与自定义语音
+- ✅ **双接口**：Web 界面 + REST API
+
+---
+
+## 为什么换用 Piper
+
+| 对比项 | pyttsx3 (espeak-ng) | Piper |
+|---|---|---|
+| 合成方式 | 共振峰拼接，机械音 | VITS 神经网络 |
+| 中文音质 | 生硬、断句差 | 自然，接近真人 |
+| 音频格式 | WAV（曾误标 .mp3） | WAV（22050 Hz） |
+| 依赖 | 系统 espeak-ng | 自带 espeak 音素数据，无需系统包 |
+| 模型体积 | 极小 | 每语音约 60 MB |
+
+> pyttsx3 的完整实现与文档保留在 `pyttsx3` 分支，可随时对照或回退。
 
 ---
 
 ## 功能特性
 
-### 当前功能
-
-| 功能 | 描述 |
-|------|------|
-| **API 接口** | `POST /api/speech` - 接收文本，返回语音文件 URL |
-| **Web 界面** | 文本输入、音色选择、语音播放、文件下载 |
-| **文件管理** | 自动保存生成的 MP3 文件到 `static/mp3/` 目录 |
-| **响应式设计** | 基于 Tailwind CSS，自适应电脑和手机浏览器 |
+- 🎙️ **文本转语音**：中文 / 英文，支持 0.5x–2.0x 语速调节
+- 🎧 **在线预览**：生成后立即播放，支持下载
+- 📋 **历史列表**：右侧展示已生成的语音（文本、音色、语速、时间、大小）
+- 🗂️ **多语音支持**：自动扫描语音目录，可按语言分组选择
+- 💾 **持久化存储**：音频与自定义模型均支持卷挂载
+- ❤️ **健康检查**：`/health` 供容器健康探针使用
+- 🧹 **自动清理**：可选按时间清理过期音频
 
 ---
 
 ## 技术栈
 
-| 层级 | 技术 | 版本 |
-|------|------|------|
-| **后端框架** | Flask | 3.1.2 |
-| **TTS 引擎** | pyttsx3 | 2.99 |
-| **前端样式** | Tailwind CSS | CDN |
-| **Python** | Python | 3.12+ |
-| **系统依赖 (Linux)** | espeak-ng | - |
-| **容器化** | Docker | python:3.12-slim |
+| 层 | 技术 |
+|---|---|
+| Web 框架 | Flask 3.1.2 |
+| TTS 引擎 | piper-tts 1.2.0（onnxruntime + piper-phonemize） |
+| 运行环境 | Python 3.11（arm64 需 cp311 wheel） |
+| 前端 | 原生 HTML/CSS/JS |
+| 容器 | Docker / docker-compose |
+
+> ⚠️ 使用 Python 3.11 而非 3.12：`piper-phonemize` 仅提供 cp311 的 aarch64 wheel。
 
 ---
 
 ## 项目结构
 
 ```
-flask-text2speech-pyttsx3/
-├── app.py                      # Flask 主应用
-├── requirements.txt            # Python 依赖
-├── Dockerfile                  # Docker 构建文件
-├── QWEN.md                     # 项目上下文文档
-├── README.md                   # 本文件
-├── static/
-│   └── mp3/                    # 生成的语音文件存储目录
-│       ├── api_1744386219.mp3
-│       └── ...
-└── templates/
-    └── index.html              # Web 界面模板
+flask-tts/
+├── app.py                      # Flask 应用（路由 / API）
+├── tts_engine.py               # Piper 引擎封装（语音发现、缓存、合成）
+├── templates/
+│   └── index.html              # Web 界面
+├── scripts/
+│   └── download_voices.py      # 语音模型下载工具
+├── voices/                     # 预置模型目录（构建时可选复用，不入库）
+├── static/audio/               # 生成的音频（卷挂载点）
+├── Dockerfile
+├── docker-compose.yml
+├── requirements.txt
+└── docs/Piper迁移说明.md
 ```
 
-### 关键文件说明
+镜像内语音目录：
 
-| 文件 | 说明 |
-|------|------|
-| `app.py` | Flask 应用主文件，定义 API 路由和页面路由 |
-| `requirements.txt` | Python 依赖清单 |
-| `Dockerfile` | 容器化部署配置 |
-| `templates/index.html` | 响应式 Web 界面 |
-| `static/mp3/` | 语音文件存储目录 |
+| 路径 | 用途 |
+|---|---|
+| `/opt/piper-voices` | 镜像内置模型（只读） |
+| `/app/voices` | 用户挂载卷，用于追加自定义语音 |
+| `/app/static/audio` | 生成的音频（卷挂载点） |
 
 ---
 
 ## 快速开始
 
-### 环境要求
-
-- Python 3.12+
-- Windows / macOS / Linux
-
-### 安装依赖
+### Docker（推荐）
 
 ```bash
+# amd64 / arm64 自动匹配
+docker run -d -p 5001:5001 --name flask-tts \
+  -v flask-tts-audio:/app/static/audio \
+  -v flask-tts-voices:/app/voices \
+  --restart unless-stopped \
+  ccr.ccs.tencentyun.com/mikewong/flask-tts:latest
+```
+
+或使用 compose：
+
+```bash
+docker compose up -d
+```
+
+访问 <http://localhost:5001>
+
+### 本地运行
+
+```bash
+python3.11 -m venv .venv && source .venv/bin/activate
 pip install -r requirements.txt
+
+# 下载语音模型到本地目录
+python scripts/download_voices.py --out ./models zh_CN-huayan-medium en_US-lessac-medium
+
+PIPER_VOICE_DIRS=./models AUDIO_DIR=./static/audio python app.py 5001
 ```
 
-### 系统依赖（仅 Linux）
+### 自行构建镜像
 
 ```bash
-# Ubuntu/Debian
-sudo apt-get update
-sudo apt-get install -y espeak libespeak-dev
+# 默认从 hf-mirror 下载模型
+docker build -t flask-tts .
 
-# CentOS/RHEL
-sudo yum install -y espeak espeak-devel
+# 指定内置语音 / 更换下载源
+docker build -t flask-tts \
+  --build-arg PIPER_VOICES="zh_CN-huayan-medium en_US-lessac-medium en_GB-alba-medium" \
+  --build-arg PIPER_VOICE_BASE=https://hf-mirror.com/rhasspy/piper-voices/resolve/v1.0.0 \
+  .
+
+# 多架构构建并推送
+docker buildx build --platform linux/amd64,linux/arm64 \
+  -t <registry>/flask-tts:latest --push .
 ```
 
-> **Windows/macOS 用户无需额外安装**，pyttsx3 会使用系统内置的语音引擎（SAPI5 / NSSpeechSynthesizer）。
+> 若 `voices/` 目录中已存在同名 `.onnx` / `.onnx.json`，构建时直接复用，不联网下载。
 
-### 启动应用
+---
+
+## 数据持久化
+
+| 挂载点 | 内容 | 说明 |
+|---|---|---|
+| `/app/static/audio` | 生成的 `.wav` 与同名 `.json` 元数据 | 不挂载则容器重建后丢失 |
+| `/app/voices` | 自定义语音模型 | 不放也行，镜像已有内置模型 |
+
+命名卷（推荐，权限自动处理）：
 
 ```bash
-python app.py
+docker volume create flask-tts-audio
+docker run -d -p 5001:5001 -v flask-tts-audio:/app/static/audio flask-tts
 ```
 
-访问 `http://localhost:5001` 即可使用 Web 界面。
+绑定挂载（需授权，容器以 uid 1000 运行）：
+
+```bash
+mkdir -p /srv/tts/audio && sudo chown -R 1000:1000 /srv/tts/audio
+docker run -d -p 5001:5001 -v /srv/tts/audio:/app/static/audio flask-tts
+```
+
+---
+
+## 添加自定义语音
+
+Piper 语音可从 [rhasspy/piper-voices](https://huggingface.co/rhasspy/piper-voices) 获取，
+每个语音需要 `.onnx` 与 `.onnx.json` 两个文件。
+
+```bash
+# 1. 查看可用语音
+python3 scripts/download_voices.py --list --filter zh_,en_
+
+# 2. 下载到宿主机的自定义语音目录
+python3 scripts/download_voices.py --out /srv/tts/voices en_GB-alba-medium
+
+# 3. 挂载该目录，服务启动时自动扫描
+docker run -d -p 5001:5001 \
+  -v /srv/tts/voices:/app/voices \
+  flask-tts
+```
+
+重启容器后 `/api/voices` 即可看到新语音（中英文之外的语音同样支持）。
 
 ---
 
 ## API 文档
 
-### POST /api/speech
+### `POST /api/speech` — 文本转语音
 
-将文本转换为语音文件，返回文件访问 URL。
+请求：
 
-#### 请求
-
-**Headers**:
-```
-Content-Type: application/json
-```
-
-**Body**:
 ```json
 {
-  "text": "你好，这是一个测试"
+  "text": "你好，世界",
+  "voice": "zh_CN-huayan-medium",
+  "speed": 1.0
 }
 ```
 
-| 参数 | 类型 | 必填 | 说明 |
-|------|------|------|------|
-| `text` | string | ✅ 是 | 要转换的文本内容 |
+| 字段 | 必填 | 说明 |
+|---|---|---|
+| `text` | ✅ | 待合成文本，最长 5000 字符 |
+| `voice` | ❌ | 语音 ID，缺省用第一个（中文优先）；也兼容数字索引 |
+| `speed` | ❌ | 语速 0.5–2.0，默认 1.0 |
 
-#### 响应
+响应：
 
-**200 OK**:
 ```json
 {
   "status": "success",
-  "url": "/static/mp3/api_1775454895.mp3"
+  "url": "/static/audio/api_1a2b3c4d.wav",
+  "voice": "zh_CN-huayan-medium",
+  "elapsed_ms": 780
 }
 ```
 
-| 字段 | 类型 | 说明 |
-|------|------|------|
-| `status` | string | 请求状态，固定返回 `"success"` |
-| `url` | string | 生成的语音文件访问路径 |
+错误示例：`400` 参数错误、`503` 未找到语音模型、`500` 合成失败。
 
-#### 使用示例
+### `GET /api/voices` — 可用语音列表
 
-```bash
-# curl 请求
-curl -X POST http://localhost:5001/api/speech \
-  -H "Content-Type: application/json" \
-  -d '{"text":"你好世界"}'
-
-# Python 请求示例
-import requests
-response = requests.post(
-    "http://localhost:5001/api/speech",
-    json={"text": "你好世界"}
-)
-print(response.json())
+```json
+{
+  "status": "success",
+  "engine": "piper",
+  "voices": [
+    {
+      "id": "zh_CN-huayan-medium",
+      "display_name": "简体中文 · huayan（中，zh_CN）",
+      "language": "zh_CN",
+      "language_family": "zh",
+      "language_name": "简体中文",
+      "quality": "medium",
+      "quality_label": "中",
+      "sample_rate": 22050,
+      "num_speakers": 1,
+      "size_bytes": 63201294
+    }
+  ]
+}
 ```
 
----
+### `GET /api/audio` — 已生成的语音列表
 
-## Docker 部署
+按创建时间倒序返回 `filename`、`url`、`size`、`text`、`voice`、`voice_name`、`speed`、`created_at`。
 
-### 构建镜像
+### `GET /health` — 健康检查
 
-```bash
-docker build -t flask-tts .
+```json
+{
+  "status": "healthy",
+  "engine": "piper",
+  "version": "0.2.0",
+  "available_voices": 2,
+  "voices": ["zh_CN-huayan-medium", "en_US-lessac-medium"]
+}
 ```
-
-### 运行容器
-
-```bash
-docker run -d -p 5001:5001 --name tts flask-tts
-```
-
-### 持久化语音文件
-
-```bash
-docker run -d \
-  -p 5001:5001 \
-  -v $(pwd)/static/mp3:/app/static/mp3 \
-  --name tts \
-  flask-tts
-```
-
-### Docker Compose（推荐）
-
-创建 `docker-compose.yml`:
-```yaml
-version: '3.8'
-
-services:
-  tts:
-    build: .
-    ports:
-      - "5001:5001"
-    volumes:
-      - ./static/mp3:/app/static/mp3
-    restart: unless-stopped
-```
-
-启动：
-```bash
-docker-compose up -d
-```
-
-### Dockerfile 特性
-
-| 特性 | 说明 |
-|------|------|
-| **基础镜像** | `python:3.12-slim` (轻量、安全) |
-| **非 root 用户** | 使用 `appuser` 运行，增强安全性 |
-| **健康检查** | 内置 `HEALTHCHECK`，每 30 秒检测 `/health` 接口 |
-| **依赖清理** | `apt-get` 安装后清理缓存，减小镜像体积 |
-
----
-
-## Ubuntu 部署
-
-### 方式一：使用自包含部署包（推荐）
-
-打包部署包：
-```bash
-bash deploy/ubuntu/package.sh
-```
-
-上传到服务器后解压并运行：
-```bash
-tar -xzf flask-tts-ubuntu.tar.gz
-cd flask-tts-ubuntu
-bash deploy.sh
-```
-
-### 方式二：使用 Git 克隆
-
-```bash
-git clone <仓库地址>
-cd flask-text2speech-pyttsx3
-bash deploy/ubuntu/deploy.sh
-```
-
-部署脚本会自动完成：环境检查、**端口选择**、虚拟环境创建、依赖安装、systemd 服务配置。
-
-> 📖 详细文档见 [deploy/ubuntu/README.md](deploy/ubuntu/README.md)
 
 ---
 
 ## 配置说明
 
-### 当前可配置项
-
-| 配置 | 位置 | 默认值 | 说明 |
-|------|------|--------|------|
-| **端口** | `app.py` 第 44 行 | `5001` | Flask 服务监听端口 |
-| **存储目录** | `app.py` 第 8 行 | `static/mp3` | 语音文件存储路径 |
-| **语速** | 可通过 `engine.setProperty('rate', value)` 调整 | 系统默认 | 语音播放速度 |
-| **音量** | 可通过 `engine.setProperty('volume', value)` 调整 | 1.0 (最大) | 音量大小 (0.0 ~ 1.0) |
-
-### 修改语速和音量示例
-
-在 `app.py` 中 `engine = pyttsx3.init()` 后添加：
-
-```python
-# 设置语速 (默认约 200)
-engine.setProperty('rate', 180)
-
-# 设置音量 (0.0 ~ 1.0)
-engine.setProperty('volume', 1.0)
-```
-
----
-
-## 已知问题
-
-### 1. 音色选择功能未实现
-
-**问题描述**：前端页面有声区选择控件，并会将 `voice` 参数传递给后端，但后端 API **未处理该参数**，始终使用默认语音。
-
-**影响**：用户无法通过界面切换不同音色。
-
-**修复方案**：见 [优化建议 #1](#1-实现音色选择功能)
-
----
-
-### 2. 并发请求可能导致阻塞
-
-**问题描述**：`pyttsx3` 的 `engine.runAndWait()` 是**阻塞调用**，同一时刻只能处理一个请求。多个并发请求会导致排队等待。
-
-**影响**：高并发场景下响应时间增加。
-
-**修复方案**：见 [优化建议 #3](#3-使用线程锁解决并发问题)
-
----
-
-### 3. 语音文件无自动清理机制
-
-**问题描述**：生成的 MP3 文件会永久保存在 `static/mp3/` 目录，长期运行会占用大量磁盘空间。
-
-**影响**：磁盘空间持续增长，需手动清理。
-
-**修复方案**：见 [优化建议 #4](#4-添加文件自动清理机制)
-
----
-
-### 4. 时间戳命名可能导致文件覆盖
-
-**问题描述**：文件名使用秒级时间戳 (`int(time.time())`)，同一秒内的多个请求会产生相同文件名，导致文件被覆盖。
-
-**影响**：高并发场景下文件丢失。
-
-**修复方案**：见 [优化建议 #5](#5-改进文件命名规则)
-
----
-
-## 优化建议
-
-### 优化建议总览表
-
-| 优先级 | # | 建议项 | 复杂度 | 影响范围 |
-|:------:|:-:|--------|:------:|----------|
-| 🔴 P0 | 1 | 实现音色选择功能 | 低 | 核心功能 |
-| 🔴 P0 | 2 | 添加输入验证和错误处理 | 低 | 安全性和稳定性 |
-| 🟡 P1 | 3 | 使用线程锁解决并发问题 | 低 | 多用户场景 |
-| 🟡 P1 | 4 | 添加文件自动清理机制 | 中 | 运维成本 |
-| 🟡 P1 | 5 | 改进文件命名规则 | 低 | 数据完整性 |
-| 🟢 P2 | 6 | 添加请求限流 | 中 | 安全防护 |
-| 🟢 P2 | 7 | 支持语速、音量等自定义参数 | 中 | 用户体验 |
-| 🟢 P2 | 8 | 添加健康检查接口 | 低 | 运维监控 |
-| 🟢 P2 | 9 | 前端体验优化（加载状态、错误提示） | 低 | 用户体验 |
-| 🟢 P2 | 10 | 日志记录 | 低 | 问题排查 |
-
----
-
-### P0 - 必须修复
-
-#### 1. 实现音色选择功能
-
-| 维度 | 说明 |
-|------|------|
-| **问题** | 前端传递了 `voice` 参数（音色索引），但后端完全忽略，始终使用默认语音 |
-| **影响** | 页面上的音色选择下拉框形同虚设，用户无法切换音色 |
-| **复杂度** | 低 — 只需在 `api_speech` 函数中添加 4-5 行代码 |
-
-**修复方案**：
-
-在 `api_speech` 函数中获取并设置音色：
-
-```python
-@app.route('/api/speech', methods=['POST'])
-def api_speech():
-    data = request.get_json()
-    text = data.get('text', '')
-    voice_id = data.get('voice')  # 新增：获取前端传来的音色索引
-
-    # ... 文件命名逻辑 ...
-
-    # 新增：根据音色索引设置语音
-    if voice_id is not None:
-        voices = engine.getProperty('voices')
-        try:
-            voice_idx = int(voice_id)
-            if 0 <= voice_idx < len(voices):
-                engine.setProperty('voice', voices[voice_idx].id)
-        except (ValueError, TypeError):
-            pass  # 音色参数无效时使用默认语音
-
-    engine.save_to_file(text, filepath)
-    # ... 后续逻辑 ...
-```
-
----
-
-#### 2. 添加输入验证和错误处理
-
-| 维度 | 说明 |
-|------|------|
-| **问题** | 未检查空请求体、空文本、超长文本，可能导致异常或资源滥用 |
-| **影响** | 恶意用户可发送超大文本导致服务器资源耗尽 |
-| **复杂度** | 低 — 只需在函数开头添加前置检查 |
-
-**修复方案**：
-
-```python
-@app.route('/api/speech', methods=['POST'])
-def api_speech():
-    data = request.get_json()
-    if not data:
-        return jsonify({'error': '请求体不能为空', 'status': 'error'}), 400
-
-    text = data.get('text', '').strip()
-    if not text:
-        return jsonify({'error': '文本内容不能为空', 'status': 'error'}), 400
-
-    MAX_TEXT_LENGTH = 5000
-    if len(text) > MAX_TEXT_LENGTH:
-        return jsonify({
-            'error': f'文本长度不能超过 {MAX_TEXT_LENGTH} 字符',
-            'status': 'error'
-        }), 400
-
-    # ... 继续处理 ...
-```
-
-**统一错误响应格式**：
-
-```json
-{
-  "status": "error",
-  "error": "文本内容不能为空"
-}
-```
-
----
-
-### P1 - 强烈建议
-
-#### 3. 使用线程锁解决并发问题
-
-| 维度 | 说明 |
-|------|------|
-| **问题** | `pyttsx3` 的 `engine` 对象不是线程安全的，多个并发请求同时调用 `runAndWait()` 会抛出 `RuntimeError` |
-| **影响** | 多用户同时使用时语音生成失败 |
-| **复杂度** | 低 — 只需添加一个全局锁 |
-
-**修复方案**：
-
-```python
-import threading
-
-# 在 app.py 顶部，engine 初始化之后添加
-engine_lock = threading.Lock()
-
-@app.route('/api/speech', methods=['POST'])
-def api_speech():
-    # ... 前置验证 ...
-
-    # 使用线程锁保护引擎调用
-    with engine_lock:
-        engine.save_to_file(text, filepath)
-        try:
-            engine.runAndWait()
-        except RuntimeError as e:
-            if 'run loop already started' in str(e):
-                try:
-                    engine.endLoop()
-                    engine.runAndWait()
-                except Exception:
-                    return jsonify({
-                        'status': 'error',
-                        'error': '语音生成失败'
-                    }), 500
-            else:
-                return jsonify({
-                    'status': 'error',
-                    'error': '语音生成失败'
-                }), 500
-
-    # ... 返回成功 ...
-```
-
----
-
-#### 4. 添加文件自动清理机制
-
-| 维度 | 说明 |
-|------|------|
-| **问题** | 生成的 MP3 文件永久堆积在 `static/mp3/` 目录 |
-| **影响** | 长期运行占用大量磁盘空间 |
-| **复杂度** | 中 — 可选择简单清理或定时任务方案 |
-
-**方案 A — 启动时清理（推荐，最简单）**：
-
-```python
-import time
-from pathlib import Path
-
-def cleanup_old_files(max_age_hours=24):
-    """清理超过指定小时的旧文件"""
-    folder = Path(app.config['UPLOAD_FOLDER'])
-    if not folder.exists():
-        return
-    
-    now = time.time()
-    cutoff = now - (max_age_hours * 3600)
-    cleaned = 0
-    
-    for file in folder.glob('*.mp3'):
-        if file.stat().st_mtime < cutoff:
-            file.unlink()
-            cleaned += 1
-    
-    if cleaned > 0:
-        print(f"已清理 {cleaned} 个过期语音文件")
-
-# 在应用启动时调用（清理 24 小时前的文件）
-cleanup_old_files(max_age_hours=24)
-```
-
-**方案 B — 定时任务（适合长期运行的服务）**：
-
-需要额外依赖：`pip install APScheduler`
-
-```python
-from apscheduler.schedulers.background import BackgroundScheduler
-
-scheduler = BackgroundScheduler()
-scheduler.add_job(cleanup_old_files, 'interval', hours=1, args=[24])
-scheduler.start()
-
-# 在应用关闭时停止调度器
-import atexit
-atexit.register(lambda: scheduler.shutdown())
-```
-
----
-
-#### 5. 改进文件命名规则
-
-| 维度 | 说明 |
-|------|------|
-| **问题** | 秒级时间戳在同一秒内的多个请求会产生文件名冲突 |
-| **影响** | 高并发场景下文件被覆盖丢失 |
-| **复杂度** | 低 — 只需修改文件名生成逻辑 |
-
-**方案对比**：
-
-| 方案 | 示例 | 优点 | 缺点 |
-|------|------|------|------|
-| **UUID（推荐）** | `api_a3f8b2c1.mp3` | 几乎零冲突 | 文件名不体现时间 |
-| 毫秒时间戳 | `api_1775454895123.mp3` | 体现时间 | 极端并发仍可能冲突 |
-| 时间戳 + 随机数 | `api_1775454895_7834.mp3` | 可读性好 | 稍长 |
-
-**推荐实现（UUID 方案）**：
-
-```python
-import uuid
-
-@app.route('/api/speech', methods=['POST'])
-def api_speech():
-    # ... 前置逻辑 ...
-    
-    # 使用 UUID 生成唯一文件名
-    filename = f"api_{uuid.uuid4().hex[:8]}.mp3"
-    filepath = os.path.join(app.config['UPLOAD_FOLDER'], filename)
-    
-    # ... 语音生成 ...
-```
-
----
-
-### P2 - 建议优化
-
-#### 6. 添加请求限流
-
-| 维度 | 说明 |
-|------|------|
-| **目的** | 防止恶意用户频繁调用 API 耗尽服务器资源 |
-| **复杂度** | 中 — 需要额外依赖 |
-
-**步骤 1**：添加依赖到 `requirements.txt`
-
-```
-Flask-Limiter==3.5.0
-```
-
-**步骤 2**：在 `app.py` 中添加限流配置
-
-```python
-from flask_limiter import Limiter
-from flask_limiter.util import get_remote_address
-
-limiter = Limiter(
-    app=app,
-    key_func=get_remote_address,
-    default_limits=["20 per minute"],  # 默认每分钟 20 次
-    storage_uri="memory://"           # 使用内存存储限流数据
-)
-
-@app.route('/api/speech', methods=['POST'])
-@limiter.limit("5 per minute")  # API 接口更严格：每分钟 5 次
-def api_speech():
-    # ...
-```
-
----
-
-#### 7. 支持语速、音量等自定义参数
-
-| 维度 | 说明 |
-|------|------|
-| **目的** | 让用户可通过 API 自定义语速、音量 |
-| **复杂度** | 中 — 需修改 API 参数和引擎设置 |
-
-**API 扩展**：
-
-```python
-@app.route('/api/speech', methods=['POST'])
-def api_speech():
-    data = request.get_json()
-    text = data.get('text', '')
-    voice_id = data.get('voice')
-    rate = data.get('rate', 200)        # 语速，默认 200
-    volume = data.get('volume', 1.0)    # 音量，默认最大
-
-    # ... 验证逻辑 ...
-
-    with engine_lock:
-        # 设置语音参数
-        engine.setProperty('rate', max(50, min(rate, 500)))    # 限制 50~500
-        engine.setProperty('volume', max(0.0, min(volume, 1.0)))  # 限制 0.0~1.0
-
-        if voice_id is not None:
-            voices = engine.getProperty('voices')
-            try:
-                voice_idx = int(voice_id)
-                if 0 <= voice_idx < len(voices):
-                    engine.setProperty('voice', voices[voice_idx].id)
-            except (ValueError, TypeError):
-                pass
-
-        engine.save_to_file(text, filepath)
-        engine.runAndWait()
-
-    return jsonify({'status': 'success', 'url': f'/static/mp3/{filename}'})
-```
-
-**请求示例**：
-
-```json
-{
-  "text": "你好世界",
-  "voice": 2,
-  "rate": 180,
-  "volume": 0.8
-}
-```
-
----
-
-#### 8. 添加健康检查接口
-
-| 维度 | 说明 |
-|------|------|
-| **目的** | 便于监控和容器编排（K8s/Docker 健康探测） |
-| **复杂度** | 低 — 只需添加一个简单路由 |
-
-```python
-@app.route('/health')
-def health():
-    voices = engine.getProperty('voices')
-    return jsonify({
-        'status': 'healthy',
-        'uptime': 'running',
-        'available_voices': len(voices)
-    })
-```
-
-**响应示例**：
-
-```json
-{
-  "status": "healthy",
-  "uptime": "running",
-  "available_voices": 5
-}
-```
-
----
-
-#### 9. 前端体验优化
-
-| 维度 | 说明 |
-|------|------|
-| **目的** | 添加加载状态、错误提示，改善用户交互体验 |
-| **复杂度** | 低 — 只需修改前端 JavaScript |
-
-**修改 `templates/index.html` 中的 JavaScript**：
-
-```javascript
-document.getElementById('convert').addEventListener('click', async () => {
-    const text = document.getElementById('text').value.trim();
-    const voiceIndex = document.getElementById('voice').value;
-    const convertBtn = document.getElementById('convert');
-
-    if (!text) {
-        alert('请输入文本');
-        return;
-    }
-
-    // 设置加载状态
-    convertBtn.disabled = true;
-    convertBtn.textContent = '转换中...';
-    convertBtn.classList.add('opacity-50', 'cursor-not-allowed');
-
-    try {
-        const response = await fetch('/api/speech', {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ text: text, voice: voiceIndex })
-        });
-
-        const data = await response.json();
-
-        if (data.status === 'success') {
-            const audio = document.getElementById('audio');
-            audio.src = data.url;
-            audio.classList.remove('hidden');
-
-            const downloadLink = document.getElementById('download');
-            downloadLink.href = data.url;
-            downloadLink.classList.remove('hidden');
-        } else {
-            alert(data.error || '转换失败，请重试');
-        }
-    } catch (error) {
-        console.error('Error:', error);
-        alert('网络错误，请检查连接后重试');
-    } finally {
-        // 恢复按钮状态
-        convertBtn.disabled = false;
-        convertBtn.textContent = '转换为语音';
-        convertBtn.classList.remove('opacity-50', 'cursor-not-allowed');
-    }
-});
-```
-
----
-
-#### 10. 日志记录
-
-| 维度 | 说明 |
-|------|------|
-| **目的** | 记录请求信息和错误，便于问题排查 |
-| **复杂度** | 低 — 只需配置 Python 标准 logging |
-
-```python
-import logging
-
-# 配置日志
-logging.basicConfig(
-    level=logging.INFO,
-    format='%(asctime)s [%(levelname)s] %(message)s',
-    datefmt='%Y-%m-%d %H:%M:%S'
-)
-
-logger = logging.getLogger(__name__)
-
-@app.route('/api/speech', methods=['POST'])
-def api_speech():
-    data = request.get_json()
-    text = data.get('text', '')
-
-    logger.info(f'Speech request received: text_length={len(text)}, '
-                f'ip={request.remote_addr}')
-
-    # ... 处理逻辑 ...
-
-    logger.info(f'Speech generated successfully: {filename}')
-    return jsonify({'status': 'success', 'url': f'/static/mp3/{filename}'})
-```
-
----
-
-### 完整优化代码参考
-
-以下是整合了所有 P0 + P1 优化后的完整 `app.py`：
-
-```python
-from flask import Flask, request, jsonify, render_template
-import pyttsx3
-import os
-import time
-import uuid
-import threading
-import logging
-from pathlib import Path
-
-# 配置日志
-logging.basicConfig(
-    level=logging.INFO,
-    format='%(asctime)s [%(levelname)s] %(message)s',
-    datefmt='%Y-%m-%d %H:%M:%S'
-)
-logger = logging.getLogger(__name__)
-
-app = Flask(__name__, static_url_path='/static')
-app.config['UPLOAD_FOLDER'] = 'static/mp3'
-
-# 确保 mp3 文件夹存在
-if not os.path.exists(app.config['UPLOAD_FOLDER']):
-    os.makedirs(app.config['UPLOAD_FOLDER'])
-
-# 初始化语音引擎
-engine = pyttsx3.init()
-
-# 线程锁（保护 pyttsx3 引擎的并发访问）
-engine_lock = threading.Lock()
-
-# 最大文本长度
-MAX_TEXT_LENGTH = 5000
-
-# 文件保留时长（小时）
-FILE_MAX_AGE_HOURS = 24
-
-
-def cleanup_old_files(max_age_hours=24):
-    """清理超过指定小时的旧文件"""
-    folder = Path(app.config['UPLOAD_FOLDER'])
-    if not folder.exists():
-        return
-
-    now = time.time()
-    cutoff = now - (max_age_hours * 3600)
-    cleaned = 0
-
-    for file in folder.glob('*.mp3'):
-        if file.stat().st_mtime < cutoff:
-            file.unlink()
-            cleaned += 1
-
-    if cleaned > 0:
-        logger.info(f"已清理 {cleaned} 个过期语音文件")
-
-
-# 应用启动时清理旧文件
-cleanup_old_files(max_age_hours=FILE_MAX_AGE_HOURS)
-
-
-@app.route('/health')
-def health():
-    """健康检查接口"""
-    voices = engine.getProperty('voices')
-    return jsonify({
-        'status': 'healthy',
-        'uptime': 'running',
-        'available_voices': len(voices)
-    })
-
-
-@app.route('/api/speech', methods=['POST'])
-def api_speech():
-    """文本转语音 API"""
-    data = request.get_json()
-    if not data:
-        return jsonify({'error': '请求体不能为空', 'status': 'error'}), 400
-
-    text = data.get('text', '').strip()
-    if not text:
-        return jsonify({'error': '文本内容不能为空', 'status': 'error'}), 400
-
-    if len(text) > MAX_TEXT_LENGTH:
-        return jsonify({
-            'error': f'文本长度不能超过 {MAX_TEXT_LENGTH} 字符',
-            'status': 'error'
-        }), 400
-
-    voice_id = data.get('voice')
-    rate = data.get('rate', 200)
-    volume = data.get('volume', 1.0)
-
-    logger.info(f'Speech request: text_length={len(text)}, voice={voice_id}, '
-                f'ip={request.remote_addr}')
-
-    # 使用 UUID 生成唯一文件名
-    filename = f"api_{uuid.uuid4().hex[:8]}.mp3"
-    filepath = os.path.join(app.config['UPLOAD_FOLDER'], filename)
-
-    # 使用线程锁保护引擎调用
-    with engine_lock:
-        try:
-            # 设置语音参数
-            engine.setProperty('rate', max(50, min(int(rate), 500)))
-            engine.setProperty('volume', max(0.0, min(float(volume), 1.0)))
-
-            if voice_id is not None:
-                voices = engine.getProperty('voices')
-                try:
-                    voice_idx = int(voice_id)
-                    if 0 <= voice_idx < len(voices):
-                        engine.setProperty('voice', voices[voice_idx].id)
-                except (ValueError, TypeError):
-                    pass
-
-            engine.save_to_file(text, filepath)
-            engine.runAndWait()
-
-        except Exception as e:
-            logger.error(f'Speech generation failed: {e}')
-            return jsonify({
-                'status': 'error',
-                'error': f'语音生成失败: {str(e)}'
-            }), 500
-
-    logger.info(f'Speech generated: {filename}')
-    return jsonify({
-        'status': 'success',
-        'url': f"/static/mp3/{filename}"
-    })
-
-
-@app.route('/')
-def index():
-    """主页"""
-    voices = engine.getProperty('voices')
-    return render_template('index.html', voices=voices)
-
-
-if __name__ == '__main__':
-    logger.info("Starting Flask Text-to-Speech application")
-    app.run(host='0.0.0.0', port=5001)
-```
-
----
-
-## 安装更多音色
-
-pyttsx3 使用系统内置的语音引擎，音色的数量和质量取决于操作系统。
-
-### Windows 系统
-
-Windows 使用 **SAPI5**（Speech API），音色来自系统已安装的语音包。
-
-#### 方案一：安装 Windows 语言包（推荐）
-
-1. 打开 **设置 → 时间和语言 → 语言和区域**
-2. 点击 **"添加语言"**
-3. 搜索并安装目标语言（如日语、韩语、法语、德语等）
-4. 安装完成后，点击该语言的 **"⋯ → 语言选项"**
-5. 在"功能"区域，确保 **"语音识别"** 和 **"文本转语音"** 已下载
-6. **重启 Python 应用**，新音色将自动出现在音色选择列表中
-
-> Windows 10/11 自带的语音质量较好。安装语言包后 pyttsx3 会自动识别。
-
-#### 方案二：安装第三方 SAPI5 语音包
-
-以下第三方语音引擎兼容 SAPI5，安装后 pyttsx3 可直接使用：
-
-| 厂商 | 类型 | 说明 |
-|------|------|------|
-| **[RhVoice](https://github.com/RhVoice/RhVoice)** | 免费开源 | 支持俄语、英语、格鲁吉亚语等 |
-| **[Balabolka](http://www.cross-plus-a.com/balabolka.htm)** | 免费 | 附带多个 SAPI5 兼容语音包 |
-| **CereProc** | 商业付费 | 高质量语音，支持多语言 |
-
-#### 方案三：查看当前可用音色
-
-运行项目自带的音色查看工具：
-
-```bash
-python list_voices.py
-```
-
-或使用 Python 代码手动查看：
-
-```python
-import pyttsx3
-engine = pyttsx3.init()
-voices = engine.getProperty('voices')
-for i, v in enumerate(voices):
-    print(f"{i}: {v.name}")
-    print(f"   ID: {v.id}")
-```
-
----
-
-### Linux 系统
-
-Linux 使用 **espeak-ng** 作为语音后端。
-
-#### 方案一：安装 espeak-ng 多语言数据
-
-espeak-ng 内置 **100+ 种语音**，覆盖全球主要语言：
-
-```bash
-# Ubuntu/Debian
-sudo apt update
-sudo apt install -y espeak-ng espeak-ng-data
-
-# CentOS/RHEL
-sudo yum install -y espeak-ng
-
-# 查看所有可用语音
-espeak-ng --voices
-
-# 按语言过滤（如中文）
-espeak-ng --voices | grep zh
-espeak-ng --voices | grep en
-```
-
-> **注意**：espeak-ng 语音覆盖广但声音较机械，适合功能验证。
-
-#### 方案二：安装 MBROLA 高质量语音
-
-MBROLA 提供比 espeak 更自然的声音：
-
-```bash
-# Ubuntu/Debian
-sudo apt install -y mbrola mbrola-zh1 mbrola-en1
-
-# 查看所有可用的 MBROLA 语音包
-apt search mbrola
-```
-
-#### 方案三：使用 Festival（可选后端）
-
-```bash
-# Ubuntu/Debian
-sudo apt install -y festival festvox-kallpc16k
-```
-
----
-
-### 音色方案对比
-
-| 方案 | 平台 | 音质 | 离线 | 免费 | 语言数 |
-|------|------|------|------|------|--------|
-| **SAPI5 系统音色** | Windows | ⭐⭐⭐ | ✅ | ✅ | 取决于安装的语言包 |
-| **espeak-ng** | Linux | ⭐⭐ | ✅ | ✅ | 100+ |
-| **MBROLA** | Linux | ⭐⭐⭐ | ✅ | ✅ | 40+ |
-| **Festival** | Linux | ⭐⭐ | ✅ | ✅ | 有限 |
-| **RhVoice** | Win/Linux | ⭐⭐⭐ | ✅ | ✅ | 10+ |
-| **Azure TTS** | 全平台 | ⭐⭐⭐⭐⭐ | ❌ | ❌ | 100+ |
-
-### 推荐组合
-
-| 场景 | 推荐方案 |
-|------|---------|
-| Windows 日常使用 | 系统设置 → 添加语言包 |
-| Linux 多语言支持 | `espeak-ng` + `mbrola` 组合 |
-| 追求高质量语音 | 考虑迁移到 `edge-tts` 或 Azure TTS |
+通过环境变量调整行为：
+
+| 变量 | 默认值 | 说明 |
+|---|---|---|
+| `PORT` | `5001` | 监听端口（也可用位置参数传入） |
+| `AUDIO_DIR` | `./static/audio` | 音频输出目录 |
+| `PIPER_VOICE_DIRS` | `/opt/piper-voices:/app/voices` | 语音搜索目录，冒号分隔，**靠前优先** |
+| `MAX_TEXT_LENGTH` | `5000` | 单次合成最大字符数 |
+| `FILE_MAX_AGE_HOURS` | `24` | 音频保留时长，`<=0` 表示不清理 |
+| `LOG_LEVEL` | `INFO` | 日志级别 |
+
+构建参数：
+
+| 参数 | 默认值 | 说明 |
+|---|---|---|
+| `PIPER_VOICES` | `zh_CN-huayan-medium en_US-lessac-medium` | 内置语音列表（空格分隔） |
+| `PIPER_VOICE_BASE` | `https://hf-mirror.com/.../v1.0.0` | 模型下载源 |
+| `PIPER_INDEX_URL` / `PIP_INDEX_URL` | 阿里云 PyPI 镜像 | Python 依赖源 |
 
 ---
 
 ## 常见问题
 
-### Q1: Windows 下运行报错 `ModuleNotFoundError: No module named 'pyttsx3'`
+**Q：容器启动后 `/api/voices` 返回 0 个语音？**
+检查 `/opt/piper-voices` 是否有 `.onnx` 与 `.onnx.json` 成对文件；若自行构建时网络失败，可预先下载到 `voices/` 再构建。
 
-**A**: 请确保已在当前 Python 环境中安装依赖：
-```bash
-pip install -r requirements.txt
-```
+**Q：中文合成出现英文读音？**
+语音 ID 需与文本语言匹配：中文用 `zh_CN-*`，英文用 `en_*`。`voice` 传错语音会按该语音的语言规则发音。
 
----
+**Q：第一次合成很慢？**
+首次请求需加载 ONNX 模型（约 1–3 秒），之后缓存在内存中，通常在 1 秒内完成。
 
-### Q2: Linux 下语音生成失败
+**Q：arm64 上能否运行？**
+可以，镜像已提供 arm64 版本。注意基础镜像使用 Python 3.11（`piper-phonemize` 的 aarch64 轮子仅覆盖 cp311）。
 
-**A**: 请确保已安装 `espeak` 和 `libespeak-dev`：
-```bash
-sudo apt-get install -y espeak libespeak-dev
-```
-
----
-
-### Q3: 生成的语音文件无法播放
-
-**A**: pyttsx3 在 Windows 下默认生成 WAV 格式但后缀为 MP3。如果遇到问题，可检查 `pyttsx3` 驱动配置。
+**Q：如何回退到 pyttsx3？**
+`git checkout pyttsx3`，或使用 v0.1.0 镜像标签。
 
 ---
 
-### Q4: Docker 容器中无法使用语音功能
+## 许可与致谢
 
-**A**: pyttsx3 依赖系统语音引擎，Docker 容器中需要安装 `espeak`。当前 `Dockerfile` 已包含此依赖，如果仍有问题，请检查容器日志：
-```bash
-docker logs tts
-```
-
----
-
-### Q5: 如何修改端口？
-
-**A**: 编辑 `app.py` 最后一行：
-```python
-app.run(host='0.0.0.0', port=5001)  # 修改 port 参数
-```
-
-或在 Docker 中映射不同端口：
-```bash
-docker run -p 8080:5001 flask-tts
-```
-
----
-
-### Q6: 如何查看可用的音色列表？
-
-**A**: 访问健康检查接口 `http://localhost:5001/health` 可查看可用音色数量。或在 Python 中运行：
-```python
-import pyttsx3
-engine = pyttsx3.init()
-voices = engine.getProperty('voices')
-for v in voices:
-    print(v.name, v.languages)
-```
-
----
-
-## 许可证
-
-本项目仅供学习和参考使用。
-
----
-
-## 更新日志
-
-| 日期 | 版本 | 说明 |
-|------|------|------|
-| 2026-04-06 | 2.0.0 | 全面优化：输入验证、线程安全、UUID 文件名、文件清理、健康检查、日志、前端体验优化 |
-| 2026-04-06 | 1.0.0 | 初始版本，基础 TTS 功能 |
+- Piper：<https://github.com/rhasspy/piper>（MIT）
+- 语音模型：<https://huggingface.co/rhasspy/piper-voices>

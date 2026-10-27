@@ -11,6 +11,7 @@ build/
 venv/
 env/
 ENV/
+.venv/
 
 # IDE
 .vscode/
@@ -25,6 +26,10 @@ Thumbs.db
 # 生成的语音文件与元数据（持久化数据，不入库）
 static/audio/
 
+# Piper 语音模型（体积大，构建时下载 / 运行时可挂载）
+voices/*
+!voices/.gitkeep
+
 # 环境变量与敏感信息
 .env
 .env.*
@@ -36,3 +41,6 @@ secrets.json
 
 # Qwen CLI 本地配置
 .qwen/
+
+# 打包产物
+*.tar.gz

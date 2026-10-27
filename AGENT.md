@@ -1,140 +1,96 @@
-# Flask Text-to-Speech (pyttsx3) 项目上下文
+# Flask Text-to-Speech (Piper) 项目上下文
 
 ## 项目概述
 
-这是一个基于 Flask 框架和 pyttsx3 库的文本转语音（TTS）Web 应用。该项目提供了一个简单的 Web 界面和 API 接口，允许用户将文本转换为语音文件（MP3 格式），并支持在线播放和下载。
+基于 Flask + **Piper** 的离线神经网络文本转语音（TTS）Web 应用。
+提供 Web 界面与 REST API，将文本合成为 WAV 音频并支持在线播放、下载与历史查看。
 
-### 主要功能
+**版本**：v0.2.0（引擎已从 pyttsx3 迁移到 Piper；pyttsx3 实现保留在 `pyttsx3` 分支）
 
-- **API 接口** (`/api/speech`): 接受 JSON 格式的文本输入，返回生成的语音文件 URL
-- **Web 界面** (`/`): 提供用户友好的界面，支持文本输入、音色选择、语音播放和下载
-- **Docker 支持**: 提供容器化部署方案，便于在不同环境中运行
+## 技术栈
 
-### 技术栈
+- 后端：Python **3.11** + Flask 3.1.2
+- TTS：piper-tts 1.2.0（onnxruntime + piper-phonemize，自带 espeak 音素数据）
+- 前端：原生 HTML/CSS/JS（无构建步骤）
+- 容器：Docker（amd64 + arm64 多架构）
+- 音频：WAV / 22050 Hz / 16-bit 单声道
 
-- **后端**: Python 3.9+, Flask 2.3.2
-- **TTS 引擎**: pyttsx3 2.98 (离线文本转语音库)
-- **前端**: HTML5 + Tailwind CSS (通过 CDN 加载)
-- **部署**: Docker (基于 python:3.9-slim 镜像)
-- **系统依赖**: espeak, libespeak-dev (Linux 环境下的语音合成依赖)
+> 为什么用 Python 3.11：`piper-phonemize==1.1.0` 的 aarch64 wheel 只覆盖 cp39/cp310/cp311，**没有 cp312**。
 
 ## 项目结构
 
 ```
-flask-text2speech-pyttsx3/
-├── app.py                 # Flask 主应用程序
-├── requirements.txt       # Python 依赖文件
-├── Dockerfile             # Docker 容器构建文件
-├── QWEN.md                # 项目上下文文档
-├── 创建一个基于edge_tts文本转语音应用.txt  # 原始需求文档
-├── static/
-│   └── mp3/               # 生成的语音文件存储目录
-└── templates/
-    └── index.html         # Web 界面模板
+flask-tts/
+├── app.py                      # Flask 路由与 API
+├── tts_engine.py               # Piper 引擎封装（发现/缓存/合成）
+├── templates/index.html        # 单页界面（双栏：表单 + 预览/历史）
+├── scripts/download_voices.py  # 语音模型下载（支持本地复用 + 断点续传）
+├── voices/                     # 预置模型目录（.gitkeep，模型不入库）
+├── static/audio/               # 生成音频（卷挂载点）
+├── Dockerfile
+├── docker-compose.yml
+└── docs/Piper迁移说明.md
 ```
 
-## 关键文件说明
+## 关键模块
+
+### `tts_engine.py`
+
+- `VoiceInfo`：语音元信息（id/language/quality/sample_rate/size...），`to_dict()` 不暴露服务器路径
+- `PiperEngine`
+  - `refresh()`：扫描 `PIPER_VOICE_DIRS`（默认 `/opt/piper-voices:/app/voices`），靠前目录优先
+  - `voices` / `get(voice_id)`：排序规则为中文优先 → 语言 → 质量
+  - `_load_model()`：延迟导入 `piper.PiperVoice`，加载后缓存在 `_models`
+  - `synthesize(text, out_path, voice_id, speed)`：`length_scale = 1/speed`，`sentence_silence=0.2`，`_synth_lock` 串行化合成
 
 ### `app.py`
-- Flask 应用主文件，定义了两个路由：
-  - `GET /`: 渲染主页模板，传递可用语音列表
-  - `POST /api/speech`: 接收 JSON 数据中的 `text` 字段，生成语音文件并返回 URL
-- 使用 `pyttsx3` 初始化语音引擎
-- 语音文件保存在 `static/mp3/` 目录下，命名格式为 `api_<timestamp>.mp3`
-- 服务运行在 **5001 端口**
 
-### `requirements.txt`
-- 定义了两个核心依赖：
-  - `Flask==2.3.2`: Web 框架
-  - `pyttsx3==2.98`: 离线文本转语音库
+| 路由 | 说明 |
+|---|---|
+| `GET /` | 渲染界面（按语言预分组传入 `voice_groups`） |
+| `POST /api/speech` | 合成；`voice` 支持语音 ID 或数字索引（向后兼容） |
+| `GET /api/voices` | 可用语音列表 |
+| `GET /api/audio` | 已生成音频列表（读 `.json` 元数据，按时间倒序） |
+| `GET /health` | 健康检查（引擎、版本、语音数） |
 
-### `Dockerfile`
-- 基于 `python:3.9-slim` 镜像
-- 安装系统级语音依赖 (`espeak`, `libespeak-dev`)
-- 安装 Python 依赖并暴露 5001 端口
+环境变量：`PORT`、`AUDIO_DIR`、`PIPER_VOICE_DIRS`、`MAX_TEXT_LENGTH`、`FILE_MAX_AGE_HOURS`、`LOG_LEVEL`。
 
 ### `templates/index.html`
-- 使用 Tailwind CSS 美化的响应式界面
-- 包含以下控件：
-  - 文本输入框 (textarea)
-  - 音色选择下拉框 (select)
-  - 转换按钮、播放按钮、下载链接
-  - 音频播放器 (HTML5 audio)
-- 通过 JavaScript 调用 `/api/speech` API 实现语音转换
 
-## 运行和部署
+- 双栏布局：左栏输入（文本 / 音色 / 语速），右栏播放预览（上）+ 历史列表（下）
+- 音色下拉用 `<optgroup>` 按语言分组，`option value` 为**语音 ID**
+- `setBtnLoading()` 每次重新查询 `#btnIcon` 再替换 `outerHTML`（避免引用失效导致转圈不消失）
+- 历史列表用事件委托 + `data-index` 绑定，避免内联脚本注入问题
 
-### 本地运行
+## 数据与持久化
 
-**前提条件**:
-- Python 3.9+
-- 安装 pyttsx3 的系统依赖：
-  - **Linux**: `sudo apt-get install espeak libespeak-dev`
-  - **Windows**: 通常无需额外安装 (使用 SAPI5)
-  - **macOS**: 使用内置的 `nsss` 语音框架
+| 路径 | 内容 |
+|---|---|
+| `/opt/piper-voices` | 镜像内置模型（构建时下载，只读） |
+| `/app/voices` | 用户自定义语音（卷挂载） |
+| `/app/static/audio` | 生成音频与元数据（卷挂载） |
 
-**启动步骤**:
-```bash
-# 安装依赖
-pip install -r requirements.txt
-
-# 运行应用
-python app.py
-```
-
-应用将在 `http://localhost:5001` 启动。
-
-### Docker 部署
+## 构建与发布
 
 ```bash
-# 构建镜像
+# 本地单架构
 docker build -t flask-tts .
 
-# 运行容器
-docker run -p 5001:5001 flask-tts
+# 多架构并推送
+docker buildx build --platform linux/amd64,linux/arm64 \
+  -t ccr.ccs.tencentyun.com/mikewong/flask-tts:v0.2.0 \
+  -t ccr.ccs.tencentyun.com/mikewong/flask-tts:latest \
+  --provenance=false --push .
 ```
 
-## API 文档
+构建参数：`PIPER_VOICES`（内置语音列表）、`PIPER_VOICE_BASE`（模型源）、`PIP_INDEX_URL`（依赖源）。
 
-### POST /api/speech
+若 `voices/` 目录已放模型文件，构建时直接复用、不联网（`.dockerignore` 未排除该目录）。
 
-**请求体** (JSON):
-```json
-{
-  "text": "要转换的文本内容"
-}
-```
+## 注意事项
 
-**响应体** (JSON):
-```json
-{
-  "status": "success",
-  "url": "/static/mp3/api_1744386219.mp3"
-}
-```
-
-**说明**:
-- 语音文件自动保存在 `static/mp3/` 目录
-- 文件命名规则: `api_<unix_timestamp>.mp3`
-
-## 开发注意事项
-
-### 已知问题
-
-1. **pyttsx3 的 runAndWait() 问题**: 代码中已处理 `run loop already started` 的运行时错误，通过捕获异常并调用 `engine.endLoop()` 来解决。
-
-2. **音色选择未实现**: 前端页面有声区选择控件，但后端 API 当前**未使用**传入的 `voice` 参数。每次转换都使用默认语音。
-
-3. **文件累积**: 生成的语音文件会持续保存在 `static/mp3/` 目录中，建议定期清理旧文件以节省磁盘空间。
-
-### 可能的改进方向
-
-- 实现音色选择功能 (后端需处理 `voice` 参数并调用 `engine.setProperty('voice', voice_id)`)
-- 添加文件自动清理机制 (如定时删除旧文件)
-- 支持更多输出格式 (如 WAV, OGG)
-- 添加请求限流和输入验证
-- 实现异步语音生成 (使用 Celery 等任务队列)
-
-## 端口配置
-
-Flask 应用默认运行在 **5001 端口** (在 `app.py` 的 `app.run()` 中定义)。
+- 首次合成需加载 ONNX 模型（1–3 秒），之后走内存缓存
+- 模型文件较大（medium ≈ 60 MB/语音），不要提交到 git
+- 构建镜像时模型下载容易受网络影响：优先用 `scripts/download_voices.py --out ./voices` 预下载
+- piper 内置索引中的 `size_bytes` 可能与镜像站文件略有差异（版本漂移），下载脚本对此只告警不失败
+- QEMU 模拟 arm64 合成极慢（约 180 秒/句），属正常现象；真机 arm64 约 1 秒

@@ -1,0 +1,9 @@
+# 该目录用于预置 Piper 语音模型（构建镜像时会 COPY 进构建上下文）
+#
+# 通配符忽略，仅保留目录本身：
+#   voices/*.onnx
+#   voices/*.onnx.json
+#
+# 构建镜像时若该目录存在模型文件，将直接复用而无需联网下载。
+# 也可用 scripts/download_voices.py 预先下载到此处：
+#   python scripts/download_voices.py --out ./voices zh_CN-huayan-medium

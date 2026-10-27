@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>文本转语音</title>
+    <title>文本转语音 · Piper</title>
     <style>
         :root {
             --bg: #f5f7fa;
@@ -33,16 +33,10 @@
             padding: 24px 16px;
         }
 
-        .container {
-            width: 100%;
-            max-width: 1120px;
-        }
+        .container { width: 100%; max-width: 1120px; }
 
         /* Header */
-        .header {
-            text-align: center;
-            margin-bottom: 32px;
-        }
+        .header { text-align: center; margin-bottom: 28px; }
         .header-icon {
             display: inline-flex;
             align-items: center;
@@ -60,9 +54,18 @@
             letter-spacing: -0.02em;
             margin-bottom: 6px;
         }
-        .header p {
-            font-size: 14px;
-            color: var(--text-secondary);
+        .header p { font-size: 14px; color: var(--text-secondary); }
+        .badge {
+            display: inline-flex;
+            align-items: center;
+            gap: 5px;
+            margin-top: 10px;
+            padding: 4px 12px;
+            font-size: 12px;
+            font-weight: 600;
+            color: #4338ca;
+            background: #eef2ff;
+            border-radius: 20px;
         }
 
         /* 双栏布局 */
@@ -72,11 +75,7 @@
             gap: 24px;
             align-items: start;
         }
-        .col-right {
-            display: flex;
-            flex-direction: column;
-            gap: 20px;
-        }
+        .col-right { display: flex; flex-direction: column; gap: 20px; }
 
         /* Card */
         .card {
@@ -87,7 +86,6 @@
             border: 1px solid var(--border);
         }
 
-        /* Section Title */
         .section-title {
             font-size: 13px;
             font-weight: 700;
@@ -97,10 +95,12 @@
             margin-bottom: 12px;
         }
 
-        /* Form Group */
+        /* Form */
         .form-group { margin-bottom: 20px; }
         .form-label {
-            display: block;
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
             font-size: 13px;
             font-weight: 600;
             color: var(--text-secondary);
@@ -108,8 +108,14 @@
             text-transform: uppercase;
             letter-spacing: 0.04em;
         }
+        .form-label .hint {
+            font-size: 11px;
+            font-weight: 500;
+            text-transform: none;
+            letter-spacing: 0;
+            color: #94a3b8;
+        }
 
-        /* Textarea */
         .textarea {
             width: 100%;
             min-height: 140px;
@@ -171,31 +177,50 @@
             box-shadow: 0 0 0 3px rgba(99,102,241,.15);
         }
 
-        /* Voice Tags */
-        .voice-tags {
+        /* Speed */
+        .speed-row {
             display: flex;
-            flex-wrap: wrap;
-            gap: 8px;
-            margin-top: 10px;
-        }
-        .voice-tag {
-            display: inline-flex;
             align-items: center;
-            gap: 4px;
-            padding: 4px 10px;
-            font-size: 12px;
-            font-weight: 500;
-            background: #f0fdf4;
-            color: #166534;
-            border-radius: 20px;
+            gap: 12px;
+        }
+        input[type="range"] {
+            flex: 1;
+            height: 6px;
+            border-radius: 3px;
+            background: var(--border);
+            appearance: none;
+            outline: none;
+            cursor: pointer;
+        }
+        input[type="range"]::-webkit-slider-thumb {
+            appearance: none;
+            width: 18px;
+            height: 18px;
+            border-radius: 50%;
+            background: var(--primary);
+            border: 3px solid #fff;
+            box-shadow: 0 1px 4px rgba(0,0,0,.2);
+        }
+        input[type="range"]::-moz-range-thumb {
+            width: 14px;
+            height: 14px;
+            border-radius: 50%;
+            background: var(--primary);
+            border: 3px solid #fff;
+        }
+        .speed-value {
+            min-width: 46px;
+            text-align: center;
+            font-size: 13px;
+            font-weight: 600;
+            color: var(--primary);
+            background: #eef2ff;
+            border-radius: 8px;
+            padding: 4px 8px;
         }
 
         /* Actions */
-        .actions {
-            display: flex;
-            gap: 10px;
-            margin-top: 24px;
-        }
+        .actions { display: flex; gap: 10px; margin-top: 24px; }
         .btn {
             display: inline-flex;
             align-items: center;
@@ -222,10 +247,7 @@
             transform: translateY(-1px);
             box-shadow: var(--shadow-lg);
         }
-        .btn-primary:disabled {
-            opacity: .5;
-            cursor: not-allowed;
-        }
+        .btn-primary:disabled { opacity: .5; cursor: not-allowed; }
         .btn-download {
             width: 100%;
             background: var(--bg);
@@ -234,18 +256,22 @@
             padding: 12px 16px;
             margin-top: 12px;
         }
-        .btn-download:hover {
-            border-color: var(--primary);
-            color: var(--primary);
-        }
+        .btn-download:hover { border-color: var(--primary); color: var(--primary); }
 
-        /* Preview Player */
+        /* Preview */
         .preview-card audio {
             width: 100%;
             height: 40px;
             outline: none;
             border-radius: 8px;
         }
+        .preview-meta {
+            font-size: 12px;
+            color: var(--text-secondary);
+            margin-top: 10px;
+            display: none;
+        }
+        .preview-meta.show { display: block; }
         .preview-empty {
             font-size: 13px;
             color: #94a3b8;
@@ -253,12 +279,12 @@
             padding: 12px 0;
         }
 
-        /* History List */
+        /* History */
         .history-list {
             display: flex;
             flex-direction: column;
             gap: 10px;
-            max-height: 520px;
+            max-height: 440px;
             overflow-y: auto;
         }
         .history-empty {
@@ -278,14 +304,8 @@
             cursor: pointer;
             transition: border-color .2s, background .2s;
         }
-        .history-item:hover {
-            border-color: var(--primary);
-            background: #f8f9ff;
-        }
-        .history-item.active {
-            border-color: var(--primary);
-            background: #eef2ff;
-        }
+        .history-item:hover { border-color: var(--primary); background: #f8f9ff; }
+        .history-item.active { border-color: var(--primary); background: #eef2ff; }
         .history-item .play-icon {
             display: inline-flex;
             align-items: center;
@@ -298,10 +318,7 @@
             flex-shrink: 0;
         }
         .history-item .play-icon svg { width: 16px; height: 16px; }
-        .history-item .item-info {
-            flex: 1;
-            min-width: 0;
-        }
+        .history-item .item-info { flex: 1; min-width: 0; }
         .history-item .item-text {
             font-size: 13px;
             font-weight: 600;
@@ -326,10 +343,7 @@
             border-radius: 8px;
             transition: color .2s, background .2s;
         }
-        .history-item .item-download:hover {
-            color: var(--primary);
-            background: rgba(99,102,241,.1);
-        }
+        .history-item .item-download:hover { color: var(--primary); background: rgba(99,102,241,.1); }
         .history-item .item-download svg { width: 16px; height: 16px; }
 
         /* Toast */
@@ -351,25 +365,19 @@
             max-width: calc(100vw - 32px);
             text-align: center;
         }
-        .toast.show {
-            opacity: 1;
-            transform: translateX(-50%) translateY(0);
-        }
+        .toast.show { opacity: 1; transform: translateX(-50%) translateY(0); }
         .toast.error { background: #ef4444; }
 
         /* Footer */
         .footer {
-            margin-top: 40px;
+            margin-top: 36px;
             text-align: center;
             font-size: 12px;
             color: var(--text-secondary);
-        }
-        .footer a {
-            color: var(--primary);
-            text-decoration: none;
+            line-height: 1.8;
         }
 
-        /* Loading Spinner */
+        /* Spinner */
         @keyframes spin { to { transform: rotate(360deg); } }
         .spinner {
             width: 18px;
@@ -382,9 +390,7 @@
 
         /* Responsive */
         @media (max-width: 900px) {
-            .main-layout {
-                grid-template-columns: 1fr;
-            }
+            .main-layout { grid-template-columns: 1fr; }
         }
         @media (max-width: 480px) {
             body { padding: 16px 12px; }
@@ -403,7 +409,8 @@
                 <svg viewBox="0 0 24 24"><path d="M12 1a3 3 0 0 0-3 3v8a3 3 0 0 0 6 0V4a3 3 0 0 0-3-3zm-1 14.93A5.001 5.001 0 0 1 7 11h-1a6.001 6.001 0 0 0 5 5.91V20H8v2h8v-2h-3v-3.07A6.001 6.001 0 0 0 18 11h-1a5.001 5.001 0 0 1-4 4.93V15.93z"/></svg>
             </div>
             <h1>文本转语音</h1>
-            <p>输入文字，即刻生成语音</p>
+            <p>输入文字，即刻生成自然语音</p>
+            <div class="badge">⚡ Piper 神经网络语音引擎 · 完全离线</div>
         </div>
 
         <!-- 双栏主体 -->
@@ -412,40 +419,48 @@
             <div class="col-left">
                 <div class="card">
                     <div class="form-group">
-                        <label class="form-label" for="text">输入文本</label>
-                        <textarea id="text" class="textarea" placeholder="请输入要转换的文字..." maxlength="5000"></textarea>
-                        <div class="char-count" id="charCount">0 / 5000</div>
+                        <label class="form-label" for="text">
+                            <span>输入文本</span>
+                            <span class="hint">支持中英文</span>
+                        </label>
+                        <textarea id="text" class="textarea"
+                                  placeholder="请输入要转换的文字..."
+                                  maxlength="{{ max_text_length }}"></textarea>
+                        <div class="char-count" id="charCount">0 / {{ max_text_length }}</div>
                     </div>
 
                     <div class="form-group">
-                        <label class="form-label" for="voice">选择音色</label>
+                        <label class="form-label" for="voice">
+                            <span>选择音色</span>
+                            <span class="hint" id="voiceCount">{{ voice_total }} 个可用</span>
+                        </label>
                         <div class="select-wrapper">
                             <select id="voice" class="select">
-                                {% for voice in voices %}
-                                <option value="{{ loop.index0 }}">
-                                    {{ voice.name }}
-                                    {% if 'ZH-CN' in voice.id or 'zh' in voice.id|lower %}
-                                        · 中文
-                                    {% elif 'EN-US' in voice.id or 'en' in voice.id|lower %}
-                                        · 英文
-                                    {% else %}
-                                        · {{ voice.languages[0] if voice.languages else '未知' }}
-                                    {% endif %}
-                                </option>
+                                {% for lang_name, group in voice_groups %}
+                                <optgroup label="{{ lang_name }}">
+                                    {% for voice in group %}
+                                    <option value="{{ voice.id }}"
+                                            data-sample-rate="{{ voice.sample_rate }}">
+                                        {{ voice.name }}（{{ voice.quality_label }}）· {{ voice.language }}
+                                    </option>
+                                    {% endfor %}
+                                </optgroup>
                                 {% endfor %}
                             </select>
                         </div>
-                        <div class="voice-tags">
-                            {% for voice in voices %}
-                            <span class="voice-tag">
-                                {% if 'ZH-CN' in voice.id or 'zh' in voice.id|lower %}🇨🇳{% elif 'EN-US' in voice.id or 'en' in voice.id|lower %}🇺🇸{% else %}🌐{% endif %}
-                                {{ voice.name.split('(')[-1].rstrip(')') if '(' in voice.name else voice.name }}
-                            </span>
-                            {% endfor %}
+                    </div>
+
+                    <div class="form-group">
+                        <label class="form-label" for="speed">
+                            <span>语速</span>
+                            <span class="hint">0.5x – 2.0x</span>
+                        </label>
+                        <div class="speed-row">
+                            <input type="range" id="speed" min="0.5" max="2" step="0.1" value="1">
+                            <span class="speed-value" id="speedValue">1.0x</span>
                         </div>
                     </div>
 
-                    <!-- Actions -->
                     <div class="actions">
                         <button id="convert" class="btn btn-primary">
                             <svg id="btnIcon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polygon points="5 3 19 12 5 21 5 3"/></svg>
@@ -461,6 +476,7 @@
                     <div class="section-title">🎧 播放预览</div>
                     <div id="previewEmpty" class="preview-empty">尚未生成语音，输入文字后点击转换</div>
                     <audio id="audio" controls style="display:none;"></audio>
+                    <div class="preview-meta" id="previewMeta"></div>
                     <a id="download" class="btn btn-download" download style="display:none;">
                         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>
                         下载当前音频
@@ -478,11 +494,10 @@
 
         <!-- Footer -->
         <div class="footer">
-            Powered by pyttsx3 · 离线合成 · 即时可用 · v{{ version }}
+            Powered by Piper · 神经网络离线合成 · v{{ version }}
         </div>
     </div>
 
-    <!-- Toast -->
     <div class="toast" id="toast"></div>
 
     <script>
@@ -494,14 +509,24 @@
         const downloadEl = $('download');
         const audioEl = $('audio');
         const previewEmptyEl = $('previewEmpty');
+        const previewMetaEl = $('previewMeta');
         const historyListEl = $('historyList');
         const toastEl = $('toast');
-        const MAX_LEN = 5000;
+        const speedEl = $('speed');
+        const speedValueEl = $('speedValue');
+        const MAX_LEN = {{ max_text_length }};
 
         const ICON_PLAY = '<svg id="btnIcon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polygon points="5 3 19 12 5 21 5 3"/></svg>';
         const ICON_SPIN = '<div class="spinner" id="btnIcon"></div>';
 
-        // 设置按钮加载状态（每次重新查询 DOM，避免引用失效导致转圈不消失）
+        let currentItems = [];
+
+        // 语速
+        speedEl.addEventListener('input', () => {
+            speedValueEl.textContent = Number(speedEl.value).toFixed(1) + 'x';
+        });
+
+        // 按钮加载状态：每次重新查询 DOM，避免 outerHTML 替换后引用失效
         function setBtnLoading(loading) {
             convertBtn.disabled = loading;
             btnText.textContent = loading ? '生成中...' : '转换为语音';
@@ -516,7 +541,6 @@
             charCountEl.className = 'char-count' + (len > MAX_LEN * 0.9 ? (len >= MAX_LEN ? ' over' : ' warn') : '');
         });
 
-        // Toast 提示
         function showToast(msg, isError = false) {
             toastEl.textContent = msg;
             toastEl.className = 'toast' + (isError ? ' error' : '');
@@ -525,27 +549,6 @@
             setTimeout(() => toastEl.classList.remove('show'), 3000);
         }
 
-        // 格式化时间
-        function formatTime(ts) {
-            if (!ts) return '';
-            const d = new Date(ts * 1000);
-            const now = new Date();
-            const diff = Math.floor((now - d) / 1000);
-            if (diff < 60) return '刚刚';
-            if (diff < 3600) return `${Math.floor(diff / 60)} 分钟前`;
-            if (diff < 86400) return `${Math.floor(diff / 3600)} 小时前`;
-            const pad = n => String(n).padStart(2, '0');
-            return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())} ${pad(d.getHours())}:${pad(d.getMinutes())}`;
-        }
-
-        // 格式化文件大小
-        function formatSize(bytes) {
-            if (bytes < 1024) return `${bytes} B`;
-            if (bytes < 1024 * 1024) return `${(bytes / 1024).toFixed(1)} KB`;
-            return `${(bytes / 1024 / 1024).toFixed(1)} MB`;
-        }
-
-        // HTML 转义
         function escapeHtml(s) {
             return String(s)
                 .replace(/&/g, '&amp;')
@@ -555,25 +558,46 @@
                 .replace(/'/g, '&#39;');
         }
 
-        // 当前历史列表数据
-        let currentItems = [];
+        function formatTime(ts) {
+            if (!ts) return '';
+            const d = new Date(ts * 1000);
+            const diff = Math.floor((Date.now() - d) / 1000);
+            if (diff < 60) return '刚刚';
+            if (diff < 3600) return `${Math.floor(diff / 60)} 分钟前`;
+            if (diff < 86400) return `${Math.floor(diff / 3600)} 小时前`;
+            const pad = n => String(n).padStart(2, '0');
+            return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())} ${pad(d.getHours())}:${pad(d.getMinutes())}`;
+        }
 
-        // 播放音频（更新预览区）
+        function formatSize(bytes) {
+            if (!bytes) return '';
+            if (bytes < 1024) return `${bytes} B`;
+            if (bytes < 1024 * 1024) return `${(bytes / 1024).toFixed(1)} KB`;
+            return `${(bytes / 1024 / 1024).toFixed(1)} MB`;
+        }
+
+        // 播放音频
         function playAudio(item) {
             audioEl.src = item.url;
             audioEl.style.display = 'block';
             previewEmptyEl.style.display = 'none';
             downloadEl.href = item.url;
             downloadEl.style.display = 'inline-flex';
+
+            const parts = [];
+            if (item.voice_name) parts.push(item.voice_name);
+            if (item.speed && Number(item.speed) !== 1) parts.push(`语速 ${Number(item.speed).toFixed(1)}x`);
+            previewMetaEl.textContent = parts.join(' · ');
+            previewMetaEl.classList.toggle('show', parts.length > 0);
+
             audioEl.play().catch(() => {});
-            // 高亮当前项
+
             document.querySelectorAll('.history-item').forEach(el => {
                 const idx = parseInt(el.dataset.index, 10);
                 el.classList.toggle('active', currentItems[idx] && currentItems[idx].url === item.url);
             });
         }
 
-        // 渲染历史列表
         function renderHistory(items) {
             currentItems = items || [];
             if (!currentItems.length) {
@@ -582,7 +606,14 @@
             }
             historyListEl.innerHTML = currentItems.map((item, idx) => {
                 const text = escapeHtml(item.text || item.filename);
-                const voice = item.voice ? item.voice.split('(').pop().replace(')', '') : '';
+                const voiceName = item.voice_name ? item.voice_name.split('（')[0] : '';
+                const speed = Number(item.speed || 1);
+                const meta = [
+                    voiceName,
+                    speed !== 1 ? `${speed.toFixed(1)}x` : '',
+                    formatTime(item.created_at),
+                    formatSize(item.size)
+                ].filter(Boolean).join(' · ');
                 return `
                 <div class="history-item" data-index="${idx}">
                     <span class="play-icon">
@@ -590,7 +621,7 @@
                     </span>
                     <div class="item-info">
                         <div class="item-text">${text}</div>
-                        <div class="item-meta">${escapeHtml(voice ? voice + ' · ' : '')}${formatTime(item.created_at)} · ${formatSize(item.size)}</div>
+                        <div class="item-meta">${escapeHtml(meta)}</div>
                     </div>
                     <a class="item-download" href="${item.url}" download title="下载">
                         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>
@@ -599,7 +630,6 @@
             }).join('');
         }
 
-        // 加载历史列表
         async function loadHistory() {
             try {
                 const res = await fetch('/api/audio');
@@ -610,65 +640,66 @@
                     historyListEl.innerHTML = '<div class="history-empty">加载失败</div>';
                 }
             } catch (err) {
-                console.error('Error loading history:', err);
+                console.error('加载历史失败:', err);
                 historyListEl.innerHTML = '<div class="history-empty">加载失败</div>';
             }
         }
 
-        // 历史列表点击事件（事件委托，避免内联脚本注入问题）
+        // 历史列表点击（事件委托）
         historyListEl.addEventListener('click', (e) => {
-            if (e.target.closest('.item-download')) return; // 下载链接走默认行为
+            if (e.target.closest('.item-download')) return;
             const itemEl = e.target.closest('.history-item');
             if (!itemEl) return;
-            const idx = parseInt(itemEl.dataset.index, 10);
-            const item = currentItems[idx];
+            const item = currentItems[parseInt(itemEl.dataset.index, 10)];
             if (item) playAudio(item);
         });
 
         // 转换
         convertBtn.addEventListener('click', async () => {
             const text = textEl.value.trim();
-            const voiceIndex = $('voice').value;
-
             if (!text) {
                 showToast('请输入要转换的文本', true);
                 return;
             }
 
             setBtnLoading(true);
-
             try {
                 const res = await fetch('/api/speech', {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({ text, voice: voiceIndex })
+                    body: JSON.stringify({
+                        text,
+                        voice: $('voice').value,
+                        speed: Number(speedEl.value)
+                    })
                 });
-
                 const data = await res.json();
 
                 if (data.status === 'success') {
                     await loadHistory();
-                    // 找到刚生成的项并播放
                     const filename = data.url.split('/').pop();
                     const item = currentItems.find(it => it.filename === filename);
-                    if (item) {
-                        playAudio(item);
-                    } else {
-                        playAudio({ url: data.url, filename, text: text, voice: '', size: 0, created_at: Date.now() / 1000 });
-                    }
-                    showToast('✅ 语音生成成功');
+                    playAudio(item || {
+                        url: data.url,
+                        filename,
+                        text,
+                        voice_name: $('voice').selectedOptions[0]?.textContent?.trim() || '',
+                        speed: Number(speedEl.value),
+                        size: 0,
+                        created_at: Date.now() / 1000
+                    });
+                    showToast(`✅ 语音生成成功${data.elapsed_ms ? `（${data.elapsed_ms} ms）` : ''}`);
                 } else {
                     showToast(data.error || '转换失败，请重试', true);
                 }
             } catch (err) {
-                console.error('Error:', err);
+                console.error('转换失败:', err);
                 showToast('网络错误，请检查连接后重试', true);
             } finally {
                 setBtnLoading(false);
             }
         });
 
-        // 页面加载时读取历史列表
         loadHistory();
     </script>
 </body>

@@ -1,0 +1,33 @@
+services:
+  flask-tts:
+    image: ccr.ccs.tencentyun.com/mikewong/flask-tts:latest
+    # 如需本地构建，改用下面两行
+    # build:
+    #   context: .
+    container_name: flask-tts
+    restart: unless-stopped
+    ports:
+      - "5001:5001"
+    environment:
+      # 音频保留时长（小时），<=0 表示不自动清理
+      FILE_MAX_AGE_HOURS: "24"
+      # 单次合成最大文本长度
+      MAX_TEXT_LENGTH: "5000"
+      # 语音模型目录（冒号分隔，优先级从高到低）
+      PIPER_VOICE_DIRS: "/opt/piper-voices:/app/voices"
+      LOG_LEVEL: "INFO"
+    volumes:
+      # 生成的语音（持久化，避免容器重建后丢失）
+      - flask-tts-audio:/app/static/audio
+      # 自定义语音模型（可放入额外的 .onnx 与 .onnx.json）
+      - flask-tts-voices:/app/voices
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:5001/health')"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+      start_period: 15s
+
+volumes:
+  flask-tts-audio:
+  flask-tts-voices:
