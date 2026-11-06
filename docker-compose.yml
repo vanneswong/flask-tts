@@ -15,6 +15,8 @@ services:
       MAX_TEXT_LENGTH: "5000"
       # 语音模型目录（冒号分隔，优先级从高到低）
       PIPER_VOICE_DIRS: "/opt/piper-voices:/app/voices"
+      # 常驻内存的模型数量（LRU）；设为 1 最省内存，0 表示不限制
+      PIPER_MODEL_CACHE_SIZE: "2"
       LOG_LEVEL: "INFO"
     volumes:
       # 生成的语音（持久化，避免容器重建后丢失）

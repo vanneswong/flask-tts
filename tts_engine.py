@@ -15,11 +15,13 @@ g2pW 资源与 BERT tokenizer，默认从 /opt/piper-data 读取（构建镜像�
 
 from __future__ import annotations
 
+import gc
 import json
 import logging
 import os
 import threading
 import wave
+from collections import OrderedDict
 from dataclasses import asdict, dataclass
 from pathlib import Path
 from typing import Dict, List, Optional, Sequence, Union
@@ -34,6 +36,9 @@ DEFAULT_DATA_DIR = "/opt/piper-data"
 
 # 句间静音时长（秒）
 DEFAULT_SENTENCE_SILENCE = 0.2
+
+# 模型缓存数量上限，<=0 表示不限制
+DEFAULT_MODEL_CACHE_SIZE = 2
 
 # 质量等级中文标签
 QUALITY_LABELS = {"x_low": "极低", "low": "低", "medium": "中", "high": "高"}
@@ -169,8 +174,15 @@ class PiperEngine:
                 )
             )
         self.sentence_silence = max(0.0, float(sentence_silence))
+        self.model_cache_size = int(
+            os.environ.get(
+                "PIPER_MODEL_CACHE_SIZE", DEFAULT_MODEL_CACHE_SIZE
+            )
+        )
         self._voices: Dict[str, VoiceInfo] = {}
-        self._models: Dict[str, object] = {}
+        self._models: "OrderedDict[str, object]" = OrderedDict()
+        self._chinese_phonemizer = None
+        self._phonemizer_lock = threading.Lock()  # 保护共享 g2pW 初始化
         self._load_lock = threading.Lock()   # 保护模型加载与缓存
         self._synth_lock = threading.Lock()  # 串行合成，避免 CPU 争抢
         self.refresh()
@@ -234,6 +246,7 @@ class PiperEngine:
         with self._load_lock:
             model = self._models.get(info.id)
             if model is not None:
+                self._models.move_to_end(info.id)
                 return model
 
             from piper import PiperVoice  # 延迟导入，便于给出友好报错
@@ -248,8 +261,47 @@ class PiperEngine:
                 config_path=info.config_path,
                 download_dir=self.data_dir,
             )
+
+            # 所有拼音音色共享同一份 g2pW/BERT，避免每个音色各占约 200 MB
+            if info.phoneme_type == "pinyin":
+                model._chinese_phonemizer = self._get_chinese_phonemizer()
+
             self._models[info.id] = model
+            self._evict_models()
             return model
+
+    def _get_chinese_phonemizer(self):
+        """初始化并复用共享的中文 g2pW 音素化器。"""
+        with self._phonemizer_lock:
+            if self._chinese_phonemizer is None:
+                from piper.phonemize_chinese import ChinesePhonemizer
+
+                model_dir = self.data_dir / "g2pW"
+                logger.info("初始化共享 g2pW 中文音素化器：%s", model_dir)
+                self._chinese_phonemizer = ChinesePhonemizer(model_dir)
+            return self._chinese_phonemizer
+
+    def _evict_models(self) -> None:
+        """按 LRU 淘汰超出上限的模型，释放 ONNX Runtime 内存。"""
+        if self.model_cache_size <= 0:
+            return
+
+        evicted = False
+        while len(self._models) > self.model_cache_size:
+            voice_id, model = self._models.popitem(last=False)
+            del model
+            logger.info("释放模型缓存：%s", voice_id)
+            evicted = True
+
+        if evicted:
+            gc.collect()
+            # 尽量把释放的内存归还给操作系统（glibc）
+            try:
+                import ctypes
+
+                ctypes.CDLL("libc.so.6").malloc_trim(0)
+            except (OSError, AttributeError):
+                pass
 
     def synthesize(
         self,

@@ -30,7 +30,7 @@ FROM python:3.11-slim
 
 LABEL maintainer="vanneswong"
 LABEL description="Flask Text-to-Speech Application based on Piper (offline neural TTS)"
-LABEL version="0.2.2"
+LABEL version="0.2.3"
 
 ENV PYTHONUNBUFFERED=1 \
     PYTHONDONTWRITEBYTECODE=1 \
@@ -39,7 +39,8 @@ ENV PYTHONUNBUFFERED=1 \
     PIPER_DATA_DIR=/opt/piper-data \
     HF_HUB_OFFLINE=1 \
     TRANSFORMERS_OFFLINE=1 \
-    HF_HUB_DISABLE_TELEMETRY=1
+    HF_HUB_DISABLE_TELEMETRY=1 \
+    MALLOC_ARENA_MAX=2
 
 WORKDIR /app
 

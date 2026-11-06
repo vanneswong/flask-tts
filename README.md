@@ -2,9 +2,9 @@
 
 > 基于 Flask + [Piper](https://github.com/rhasspy/piper) 的**离线神经网络**文本转语音 Web 应用
 
-当前版本：**v0.2.2**（Piper 1.8.0，支持 `phoneme_type: pinyin` 中文音色，新增语音删除功能）
+当前版本：**v0.2.3**（修复长时间运行内存增长；Piper 1.8.0，支持 `phoneme_type: pinyin` 中文音色）
 
-本次变更详见 [docs/v0.2.2更新说明.md](docs/v0.2.2更新说明.md)。
+本次变更详见 [docs/v0.2.3更新说明.md](docs/v0.2.3更新说明.md)。
 
 ---
 
@@ -312,6 +312,7 @@ docker run -d -p 5001:5001 \
 | `PIPER_VOICE_DIRS` | `/opt/piper-voices:/app/voices` | 语音搜索目录，冒号分隔，**靠前优先** |
 | `PIPER_DATA_DIR` | `/opt/piper-data` | pinyin 音色所需的 g2pW / BERT 资源目录 |
 | `PIPER_SENTENCE_SILENCE` | `0.2` | 句间静音时长（秒） |
+| `PIPER_MODEL_CACHE_SIZE` | `2` | 常驻内存的模型数量上限（LRU），`<=0` 表示不限制；设为 `1` 最省内存 |
 | `MAX_TEXT_LENGTH` | `5000` | 单次合成最大字符数 |
 | `FILE_MAX_AGE_HOURS` | `24` | 音频保留时长，`<=0` 表示不清理 |
 | `LOG_LEVEL` | `INFO` | 日志级别 |
@@ -346,6 +347,15 @@ BERT tokenizer。若自行构建，请确认 `assets/g2pw.tar.gz` 完整（约 1
 
 **Q：拼音音色首次合成较慢？**
 首次使用需加载 159 MB 的 g2pW ONNX 模型，约增加 2–4 秒，之后进程内缓存。
+
+**Q：长时间运行后容器内存越来越大？**
+v0.2.2 及更早版本会缓存所有使用过的音色模型，并且每个拼音音色都会各自加载一份
+g2pW（约 200 MB），多音色交替使用时容易累积到 1 GB 以上。v0.2.3 已修复：
+
+- 所有拼音音色共享同一份 g2pW / BERT tokenizer
+- 模型缓存改为 LRU，默认只保留最近使用的 2 个模型
+- 淘汰模型时执行 `gc.collect()` 与 `malloc_trim()`，尽量将内存归还系统
+- 需要进一步降低内存可设置 `PIPER_MODEL_CACHE_SIZE=1`（约 420 MB）
 
 **Q：arm64 上能否运行？**
 可以。`piper-tts 1.8.0` 使用 abi3 wheel，amd64 / arm64 均有官方轮子；
