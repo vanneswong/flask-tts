@@ -2,9 +2,9 @@
 
 > 基于 Flask + [Piper](https://github.com/rhasspy/piper) 的**离线神经网络**文本转语音 Web 应用
 
-当前版本：**v0.2.3**（修复长时间运行内存增长；Piper 1.8.0，支持 `phoneme_type: pinyin` 中文音色）
+当前版本：**v0.2.4**（关闭 ONNX Runtime 内存池，长文本合成后内存不再累积；Piper 1.8.0，支持拼音音色）
 
-本次变更详见 [docs/v0.2.3更新说明.md](docs/v0.2.3更新说明.md)。
+本次变更详见 [docs/v0.2.4更新说明.md](docs/v0.2.4更新说明.md)。
 
 ---
 
@@ -125,7 +125,7 @@ docker run -d -p 5001:5001 --name flask-tts \
   -v flask-tts-audio:/app/static/audio \
   -v flask-tts-voices:/app/voices \
   --restart unless-stopped \
-  ccr.ccs.tencentyun.com/mikewong/flask-tts:v0.2.3
+  ccr.ccs.tencentyun.com/mikewong/flask-tts:v0.2.4
 ```
 
 或使用 compose（推荐，已按省内存配置）：
@@ -133,7 +133,7 @@ docker run -d -p 5001:5001 --name flask-tts \
 ```yaml
 services:
   flask-tts:
-    image: ccr.ccs.tencentyun.com/mikewong/flask-tts:v0.2.3
+    image: ccr.ccs.tencentyun.com/mikewong/flask-tts:v0.2.4
     container_name: flask-tts
     ports:
       - "5001:5001"
@@ -336,11 +336,13 @@ docker run -d -p 5001:5001 \
 | `PIPER_DATA_DIR` | `/opt/piper-data` | pinyin 音色所需的 g2pW / BERT 资源目录 |
 | `PIPER_SENTENCE_SILENCE` | `0.2` | 句间静音时长（秒） |
 | `PIPER_MODEL_CACHE_SIZE` | `2` | 常驻内存的模型数量上限（LRU），`<=0` 表示不限制；设为 `1` 最省内存 |
+| `PIPER_ORT_MEM_ARENA` | `0` | 是否启用 ONNX Runtime CPU 内存池；`0` 显著降低长文本后的常驻内存 |
+| `PIPER_ORT_MEM_PATTERN` | `0` | 是否启用 ORT memory pattern；`0` 进一步降低内存占用 |
 | `MAX_TEXT_LENGTH` | `5000` | 单次合成最大字符数 |
 | `FILE_MAX_AGE_HOURS` | `24` | 音频保留时长，`<=0` 表示不清理 |
 | `LOG_LEVEL` | `INFO` | 日志级别 |
 
-> 仓库自带的 `docker-compose.yml` 已设置 `PIPER_MODEL_CACHE_SIZE=1`（约 420 MB）；
+> 仓库自带的 `docker-compose.yml` 已设置 `PIPER_MODEL_CACHE_SIZE=1`（约 450 MB）；
 > 不设置时镜像默认值为 `2`。
 
 构建参数：
@@ -375,13 +377,22 @@ BERT tokenizer。若自行构建，请确认 `assets/g2pw.tar.gz` 完整（约 1
 首次使用需加载 159 MB 的 g2pW ONNX 模型，约增加 2–4 秒，之后进程内缓存。
 
 **Q：长时间运行后容器内存越来越大？**
-v0.2.2 及更早版本会缓存所有使用过的音色模型，并且每个拼音音色都会各自加载一份
-g2pW（约 200 MB），多音色交替使用时容易累积到 1 GB 以上。v0.2.3 已修复：
+原因有两层：
 
-- 所有拼音音色共享同一份 g2pW / BERT tokenizer
-- 模型缓存改为 LRU，默认只保留最近使用的 2 个模型
-- 淘汰模型时执行 `gc.collect()` 与 `malloc_trim()`，尽量将内存归还系统
-- 需要进一步降低内存可设置 `PIPER_MODEL_CACHE_SIZE=1`（约 420 MB）
+1. v0.2.2 及更早版本会缓存所有音色模型，且每个拼音音色各自加载一份 g2pW。
+   v0.2.3 已通过「共享 g2pW + LRU 模型缓存」修复。
+2. v0.2.3 仍然使用 ONNX Runtime 默认内存池。长文本合成后，ORT 会把临时推理
+   内存保留在进程内，单次长文本即可把 RSS 推到 1.3 GB 以上。v0.2.4 默认关闭
+   ORT CPU 内存池与 memory pattern，长文本后稳定在约 450 MB。
+
+如果仍需进一步降低内存，可设置：
+
+```yaml
+environment:
+  PIPER_MODEL_CACHE_SIZE: "1"
+  PIPER_ORT_MEM_ARENA: "0"
+  PIPER_ORT_MEM_PATTERN: "0"
+```
 
 **Q：arm64 上能否运行？**
 可以。`piper-tts 1.8.0` 使用 abi3 wheel，amd64 / arm64 均有官方轮子；

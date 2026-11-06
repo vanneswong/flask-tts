@@ -5,7 +5,7 @@
 基于 Flask + **Piper** 的离线神经网络文本转语音（TTS）Web 应用。
 提供 Web 界面与 REST API，将文本合成为 WAV 音频并支持在线播放、下载与历史查看。
 
-**版本**：v0.2.3（Piper 1.8.0，拼音音色、语音删除；修复模型缓存导致的内存增长）
+**版本**：v0.2.4（Piper 1.8.0，拼音音色、语音删除；关闭 ORT 内存池，修复长文本导致的内存增长）
 
 ## 技术栈
 
@@ -43,9 +43,10 @@ flask-tts/
 - `PiperEngine`
   - `refresh()`：扫描 `PIPER_VOICE_DIRS`（默认 `/opt/piper-voices:/app/voices`），靠前目录优先
   - `voices` / `get(voice_id)`：排序规则为中文优先 → 语言 → 质量
-  - `_load_model()`：延迟导入 `piper.PiperVoice`，`download_dir=PIPER_DATA_DIR`，模型缓存在 `OrderedDict` 中
+  - `_load_model()`：延迟构建 `PiperVoice`，模型缓存在 `OrderedDict` 中
+  - `_create_piper_voice()`：自行创建 ORT `InferenceSession`，默认 `enable_cpu_mem_arena=False`、`enable_mem_pattern=False`
   - 模型缓存为 LRU，上限由 `PIPER_MODEL_CACHE_SIZE` 控制（默认 2，`<=0` 不限制）；淘汰时 `gc.collect()` + `malloc_trim(0)`
-  - `_get_chinese_phonemizer()`：所有 `phoneme_type=pinyin` 音色共享一份 g2pW/BERT，避免每个音色重复占用约 200 MB
+  - `_get_chinese_phonemizer()`：所有 `phoneme_type=pinyin` 音色共享一份 g2pW/BERT；g2pW 的 ORT 会话同样关闭内存池
   - `synthesize(text, out_path, voice_id, speed)`：使用 `SynthesisConfig(length_scale=1/speed)`，逐句写入音频并插入 `PIPER_SENTENCE_SILENCE` 静音，`_synth_lock` 串行化合成
 
 ### `app.py`
@@ -59,7 +60,7 @@ flask-tts/
 | `DELETE /api/audio/<filename>` | 删除音频与元数据（校验文件名，支持前端历史列表删除） |
 | `GET /health` | 健康检查（引擎、版本、语音数、phoneme_type） |
 
-环境变量：`PORT`、`AUDIO_DIR`、`PIPER_VOICE_DIRS`、`PIPER_DATA_DIR`、`PIPER_SENTENCE_SILENCE`、`PIPER_MODEL_CACHE_SIZE`、`MAX_TEXT_LENGTH`、`FILE_MAX_AGE_HOURS`、`LOG_LEVEL`。
+环境变量：`PORT`、`AUDIO_DIR`、`PIPER_VOICE_DIRS`、`PIPER_DATA_DIR`、`PIPER_SENTENCE_SILENCE`、`PIPER_MODEL_CACHE_SIZE`、`PIPER_ORT_MEM_ARENA`、`PIPER_ORT_MEM_PATTERN`、`MAX_TEXT_LENGTH`、`FILE_MAX_AGE_HOURS`、`LOG_LEVEL`。
 
 ### `templates/index.html`
 
@@ -99,7 +100,7 @@ docker buildx build --platform linux/amd64,linux/arm64 \
 ## 注意事项
 
 - 首次合成需加载 ONNX 模型（1–3 秒），之后走 LRU 内存缓存（默认 2 个）
-- 单个拼音模型 + 共享 g2pW 常驻约 380–420 MB；每个额外模型约 85–150 MB
+- 单个拼音模型 + 共享 g2pW 常驻约 380–450 MB；长文本合成后也不会因 ORT 内存池持续累积
 - 模型文件较大（medium ≈ 60 MB/语音），不要提交到 git
 - 拼音音色（`phoneme_type=pinyin`）额外需要 159 MB 的 g2pW ONNX 模型；不要删除 `/opt/piper-data`
 - 构建镜像时模型下载容易受网络影响：优先用 `scripts/download_voices.py --out ./voices` 预下载

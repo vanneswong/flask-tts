@@ -1,6 +1,6 @@
 services:
   flask-tts:
-    image: ccr.ccs.tencentyun.com/mikewong/flask-tts:v0.2.3
+    image: ccr.ccs.tencentyun.com/mikewong/flask-tts:v0.2.4
     # 如需跟随最新版，可改为 :latest
     # 如需本地构建，改用下面两行
     # build:

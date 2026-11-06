@@ -50,7 +50,7 @@ REQUIRED_FILES = (
 )
 
 USER_AGENT = (
-    "Mozilla/5.0 (compatible; flask-tts/0.2.3; "
+    "Mozilla/5.0 (compatible; flask-tts/0.2.4; "
     "+https://github.com/vanneswong/flask-tts)"
 )
 

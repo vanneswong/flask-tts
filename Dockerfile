@@ -30,7 +30,6 @@ FROM python:3.11-slim
 
 LABEL maintainer="vanneswong"
 LABEL description="Flask Text-to-Speech Application based on Piper (offline neural TTS)"
-LABEL version="0.2.3"
 
 ENV PYTHONUNBUFFERED=1 \
     PYTHONDONTWRITEBYTECODE=1 \
@@ -71,6 +70,10 @@ RUN python /tmp/download_voices.py \
 # 复制应用代码
 COPY app.py tts_engine.py ./
 COPY templates/ ./templates/
+
+# 版本标签放在依赖安装之后，避免升版本时使 pip 缓存失效
+ARG APP_VERSION=0.2.4
+LABEL version="${APP_VERSION}"
 
 # 数据目录：生成的音频 / 用户自定义语音
 RUN mkdir -p /app/static/audio /app/voices

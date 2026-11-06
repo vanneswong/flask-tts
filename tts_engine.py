@@ -40,6 +40,14 @@ DEFAULT_SENTENCE_SILENCE = 0.2
 # 模型缓存数量上限，<=0 表示不限制
 DEFAULT_MODEL_CACHE_SIZE = 2
 
+
+def _env_flag(name: str, default: bool = False) -> bool:
+    """解析布尔型环境变量。"""
+    value = os.environ.get(name)
+    if value is None:
+        return default
+    return value.strip().lower() not in ("0", "false", "no", "off", "")
+
 # 质量等级中文标签
 QUALITY_LABELS = {"x_low": "极低", "low": "低", "medium": "中", "high": "高"}
 
@@ -179,6 +187,10 @@ class PiperEngine:
                 "PIPER_MODEL_CACHE_SIZE", DEFAULT_MODEL_CACHE_SIZE
             )
         )
+        # 长文本合成时，ORT 默认内存池会把临时推理内存长期保留在进程内；
+        # 关闭 arena / memory pattern 可显著降低常驻内存（约 1.3 GB -> 0.5 GB）
+        self.ort_mem_arena = _env_flag("PIPER_ORT_MEM_ARENA", False)
+        self.ort_mem_pattern = _env_flag("PIPER_ORT_MEM_PATTERN", False)
         self._voices: Dict[str, VoiceInfo] = {}
         self._models: "OrderedDict[str, object]" = OrderedDict()
         self._chinese_phonemizer = None
@@ -249,18 +261,12 @@ class PiperEngine:
                 self._models.move_to_end(info.id)
                 return model
 
-            from piper import PiperVoice  # 延迟导入，便于给出友好报错
-
             logger.info(
                 "加载 Piper 语音模型：%s（phoneme_type=%s）",
                 info.model_path,
                 info.phoneme_type,
             )
-            model = PiperVoice.load(
-                info.model_path,
-                config_path=info.config_path,
-                download_dir=self.data_dir,
-            )
+            model = self._create_piper_voice(info)
 
             # 所有拼音音色共享同一份 g2pW/BERT，避免每个音色各占约 200 MB
             if info.phoneme_type == "pinyin":
@@ -270,6 +276,39 @@ class PiperEngine:
             self._evict_models()
             return model
 
+    def _session_options(self):
+        """创建关闭内存池的 ONNX Runtime 会话选项。"""
+        import onnxruntime
+
+        options = onnxruntime.SessionOptions()
+        options.enable_cpu_mem_arena = self.ort_mem_arena
+        options.enable_mem_pattern = self.ort_mem_pattern
+        return options
+
+    def _create_piper_voice(self, info: VoiceInfo):
+        """构建 PiperVoice，使用关闭内存池的 ORT 会话。"""
+        import json
+
+        import onnxruntime
+        from piper import PiperConfig, PiperVoice
+        from piper.voice import ESPEAK_DATA_DIR
+
+        config_dict = json.loads(
+            Path(info.config_path).read_text(encoding="utf-8")
+        )
+        config = PiperConfig.from_dict(config_dict)
+        session = onnxruntime.InferenceSession(
+            info.model_path,
+            sess_options=self._session_options(),
+            providers=["CPUExecutionProvider"],
+        )
+        return PiperVoice(
+            session=session,
+            config=config,
+            espeak_data_dir=ESPEAK_DATA_DIR,
+            download_dir=self.data_dir,
+        )
+
     def _get_chinese_phonemizer(self):
         """初始化并复用共享的中文 g2pW 音素化器。"""
         with self._phonemizer_lock:
@@ -278,7 +317,31 @@ class PiperEngine:
 
                 model_dir = self.data_dir / "g2pW"
                 logger.info("初始化共享 g2pW 中文音素化器：%s", model_dir)
-                self._chinese_phonemizer = ChinesePhonemizer(model_dir)
+
+                if self.ort_mem_arena and self.ort_mem_pattern:
+                    phonemizer = ChinesePhonemizer(model_dir)
+                else:
+                    # g2pW 内部自行创建 SessionOptions，这里临时替换默认值，
+                    # 让它的 ORT 会话也关闭内存池（避免长文本后 RSS 不释放）
+                    import onnxruntime
+
+                    original_options = onnxruntime.SessionOptions
+                    mem_arena = self.ort_mem_arena
+                    mem_pattern = self.ort_mem_pattern
+
+                    class NoArenaSessionOptions(original_options):
+                        def __init__(self, *args, **kwargs):
+                            super().__init__(*args, **kwargs)
+                            self.enable_cpu_mem_arena = mem_arena
+                            self.enable_mem_pattern = mem_pattern
+
+                    onnxruntime.SessionOptions = NoArenaSessionOptions
+                    try:
+                        phonemizer = ChinesePhonemizer(model_dir)
+                    finally:
+                        onnxruntime.SessionOptions = original_options
+
+                self._chinese_phonemizer = phonemizer
             return self._chinese_phonemizer
 
     def _evict_models(self) -> None:
