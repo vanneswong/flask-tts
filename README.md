@@ -121,13 +121,36 @@ flask-tts/
 ```bash
 # amd64 / arm64 自动匹配
 docker run -d -p 5001:5001 --name flask-tts \
+  -e PIPER_MODEL_CACHE_SIZE=1 \
   -v flask-tts-audio:/app/static/audio \
   -v flask-tts-voices:/app/voices \
   --restart unless-stopped \
-  ccr.ccs.tencentyun.com/mikewong/flask-tts:latest
+  ccr.ccs.tencentyun.com/mikewong/flask-tts:v0.2.3
 ```
 
-或使用 compose：
+或使用 compose（推荐，已按省内存配置）：
+
+```yaml
+services:
+  flask-tts:
+    image: ccr.ccs.tencentyun.com/mikewong/flask-tts:v0.2.3
+    container_name: flask-tts
+    ports:
+      - "5001:5001"
+    environment:
+      # 常驻内存的模型数量（LRU）；1 最省内存
+      PIPER_MODEL_CACHE_SIZE: "1"
+    volumes:
+      - flask-tts-audio:/app/static/audio
+      - flask-tts-voices:/app/voices
+    restart: unless-stopped
+
+volumes:
+  flask-tts-audio:
+    name: flask-tts-audio
+  flask-tts-voices:
+    name: flask-tts-voices
+```
 
 ```bash
 docker compose up -d
@@ -316,6 +339,9 @@ docker run -d -p 5001:5001 \
 | `MAX_TEXT_LENGTH` | `5000` | 单次合成最大字符数 |
 | `FILE_MAX_AGE_HOURS` | `24` | 音频保留时长，`<=0` 表示不清理 |
 | `LOG_LEVEL` | `INFO` | 日志级别 |
+
+> 仓库自带的 `docker-compose.yml` 已设置 `PIPER_MODEL_CACHE_SIZE=1`（约 420 MB）；
+> 不设置时镜像默认值为 `2`。
 
 构建参数：
 
