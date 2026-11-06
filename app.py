@@ -24,7 +24,7 @@ logging.basicConfig(
 logger = logging.getLogger(__name__)
 
 # 应用版本号
-APP_VERSION = "0.2.1"
+APP_VERSION = "0.2.2"
 
 # 最大文本长度限制
 MAX_TEXT_LENGTH = int(os.environ.get("MAX_TEXT_LENGTH", "5000"))
@@ -242,6 +242,31 @@ def api_audio_list():
     return jsonify({"status": "success", "items": items})
 
 
+@app.route("/api/audio/<filename>", methods=["DELETE"])
+def api_audio_delete(filename: str):
+    """删除指定语音文件及其元数据。"""
+    safe_name = Path(filename).name
+    if safe_name != filename or not safe_name.endswith(".wav"):
+        return jsonify({"status": "error", "error": "文件名不合法"}), 400
+
+    target = AUDIO_DIR / safe_name
+    if not target.is_file():
+        return jsonify({"status": "error", "error": "语音不存在"}), 404
+
+    try:
+        target.unlink()
+        _audio_meta_path(safe_name).unlink(missing_ok=True)
+    except OSError as exc:
+        logger.warning("删除语音失败 %s: %s", safe_name, exc)
+        return jsonify({
+            "status": "error",
+            "error": f"删除失败：{exc}",
+        }), 500
+
+    logger.info("已删除语音：%s", safe_name)
+    return jsonify({"status": "success", "filename": safe_name})
+
+
 @app.route("/health")
 def health():
     """健康检查接口。"""
@@ -252,6 +277,7 @@ def health():
         "version": APP_VERSION,
         "available_voices": len(voices),
         "voices": engine.voice_ids(),
+        "phoneme_types": sorted({v.phoneme_type for v in voices}),
     })
 
 

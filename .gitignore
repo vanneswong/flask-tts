@@ -30,6 +30,10 @@ static/audio/
 voices/*
 !voices/.gitkeep
 
+# 构建资源（可选本地缓存，不入库）
+assets/*.tar.gz
+assets/*.onnx
+
 # 环境变量与敏感信息
 .env
 .env.*

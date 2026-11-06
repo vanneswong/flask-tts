@@ -2,7 +2,9 @@
 
 > 基于 Flask + [Piper](https://github.com/rhasspy/piper) 的**离线神经网络**文本转语音 Web 应用
 
-当前版本：**v0.2.1**（引擎已由 pyttsx3 迁移至 Piper，旧实现见 `pyttsx3` 分支）
+当前版本：**v0.2.2**（Piper 1.8.0，支持 `phoneme_type: pinyin` 中文音色，新增语音删除功能）
+
+本次变更详见 [docs/v0.2.2更新说明.md](docs/v0.2.2更新说明.md)。
 
 ---
 
@@ -55,8 +57,10 @@
 ## 功能特性
 
 - 🎙️ **文本转语音**：中文 / 英文，支持 0.5x–2.0x 语速调节
+- 🀄 **拼音音色**：支持 `zh_CN-chaowen-medium`、`zh_CN-xiao_ya-medium` 等 pinyin 音色
 - 🎧 **在线预览**：生成后立即播放，支持下载
 - 📋 **历史列表**：右侧展示已生成的语音（文本、音色、语速、时间、大小）
+- 🗑️ **删除语音**：历史列表支持单条删除，同时清理音频与元数据
 - 🗂️ **多语音支持**：自动扫描语音目录，可按语言分组选择
 - 💾 **持久化存储**：音频与自定义模型均支持卷挂载
 - ❤️ **健康检查**：`/health` 供容器健康探针使用
@@ -69,12 +73,13 @@
 | 层 | 技术 |
 |---|---|
 | Web 框架 | Flask 3.1.2 |
-| TTS 引擎 | piper-tts 1.2.0（onnxruntime + piper-phonemize） |
-| 运行环境 | Python 3.11（arm64 需 cp311 wheel） |
+| TTS 引擎 | piper-tts 1.8.0（onnxruntime + g2pW 拼音音素化） |
+| 运行环境 | Python 3.11 |
 | 前端 | 原生 HTML/CSS/JS |
 | 容器 | Docker / docker-compose |
 
-> ⚠️ 使用 Python 3.11 而非 3.12：`piper-phonemize` 仅提供 cp311 的 aarch64 wheel。
+> piper-tts 1.8.0 使用 abi3 wheel，amd64 / arm64 均有官方轮子；中文 pinyin 音色
+> 需要 `[zh]` extra（g2pW + transformers），镜像构建时已预置全部离线资源。
 
 ---
 
@@ -87,7 +92,9 @@ flask-tts/
 ├── templates/
 │   └── index.html              # Web 界面
 ├── scripts/
-│   └── download_voices.py      # 语音模型下载工具
+│   ├── download_voices.py      # 语音模型下载工具
+│   └── download_g2pw.py        # 拼音音色资源（g2pW + BERT tokenizer）
+├── assets/                     # 可选本地构建缓存（g2pw.tar.gz，不入库）
 ├── voices/                     # 预置模型目录（构建时可选复用，不入库）
 ├── static/audio/               # 生成的音频（卷挂载点）
 ├── Dockerfile
@@ -101,6 +108,7 @@ flask-tts/
 | 路径 | 用途 |
 |---|---|
 | `/opt/piper-voices` | 镜像内置模型（只读） |
+| `/opt/piper-data` | 拼音音色资源：g2pW 模型 + BERT tokenizer（只读） |
 | `/app/voices` | 用户挂载卷，用于追加自定义语音 |
 | `/app/static/audio` | 生成的音频（卷挂载点） |
 
@@ -146,9 +154,10 @@ PIPER_VOICE_DIRS=./models AUDIO_DIR=./static/audio python app.py 5001
 docker build -t flask-tts .
 
 # 指定内置语音 / 更换下载源
+# 拼音音色（chaowen / xiao_ya）需要 piper-tts[zh]，镜像默认已包含
 docker build -t flask-tts \
-  --build-arg PIPER_VOICES="zh_CN-huayan-medium en_US-lessac-medium en_GB-alba-medium" \
-  --build-arg PIPER_VOICE_BASE=https://hf-mirror.com/rhasspy/piper-voices/resolve/v1.0.0 \
+  --build-arg PIPER_VOICES="zh_CN-huayan-medium zh_CN-chaowen-medium zh_CN-xiao_ya-medium en_US-lessac-medium en_GB-alba-medium" \
+  --build-arg PIPER_VOICE_BASE=https://hf-mirror.com/rhasspy/piper-voices/resolve/main \
   .
 
 # 多架构构建并推送
@@ -157,6 +166,7 @@ docker buildx build --platform linux/amd64,linux/arm64 \
 ```
 
 > 若 `voices/` 目录中已存在同名 `.onnx` / `.onnx.json`，构建时直接复用，不联网下载。
+> 若 `assets/g2pw.tar.gz` 已存在，构建时同样直接复用，避免重复下载 108 MB 拼音资源。
 
 ---
 
@@ -253,9 +263,10 @@ docker run -d -p 5001:5001 \
       "language_name": "简体中文",
       "quality": "medium",
       "quality_label": "中",
+      "phoneme_type": "pinyin",
       "sample_rate": 22050,
       "num_speakers": 1,
-      "size_bytes": 63201294
+      "size_bytes": 63221984
     }
   ]
 }
@@ -265,15 +276,26 @@ docker run -d -p 5001:5001 \
 
 按创建时间倒序返回 `filename`、`url`、`size`、`text`、`voice`、`voice_name`、`speed`、`created_at`。
 
+### `DELETE /api/audio/<filename>` — 删除已生成的语音
+
+同时删除 `.wav` 与同名 `.json` 元数据：
+
+```json
+{ "status": "success", "filename": "api_1a2b3c4d.wav" }
+```
+
+文件名不合法返回 `400`，语音不存在返回 `404`。
+
 ### `GET /health` — 健康检查
 
 ```json
 {
   "status": "healthy",
   "engine": "piper",
-  "version": "0.2.1",
-  "available_voices": 2,
-  "voices": ["zh_CN-huayan-medium", "en_US-lessac-medium"]
+  "version": "0.2.2",
+  "available_voices": 4,
+  "voices": ["zh_CN-chaowen-medium", "zh_CN-huayan-medium", "zh_CN-xiao_ya-medium", "en_US-lessac-medium"],
+  "phoneme_types": ["espeak", "pinyin"]
 }
 ```
 
@@ -288,6 +310,8 @@ docker run -d -p 5001:5001 \
 | `PORT` | `5001` | 监听端口（也可用位置参数传入） |
 | `AUDIO_DIR` | `./static/audio` | 音频输出目录 |
 | `PIPER_VOICE_DIRS` | `/opt/piper-voices:/app/voices` | 语音搜索目录，冒号分隔，**靠前优先** |
+| `PIPER_DATA_DIR` | `/opt/piper-data` | pinyin 音色所需的 g2pW / BERT 资源目录 |
+| `PIPER_SENTENCE_SILENCE` | `0.2` | 句间静音时长（秒） |
 | `MAX_TEXT_LENGTH` | `5000` | 单次合成最大字符数 |
 | `FILE_MAX_AGE_HOURS` | `24` | 音频保留时长，`<=0` 表示不清理 |
 | `LOG_LEVEL` | `INFO` | 日志级别 |
@@ -296,9 +320,11 @@ docker run -d -p 5001:5001 \
 
 | 参数 | 默认值 | 说明 |
 |---|---|---|
-| `PIPER_VOICES` | `zh_CN-huayan-medium en_US-lessac-medium` | 内置语音列表（空格分隔） |
-| `PIPER_VOICE_BASE` | `https://hf-mirror.com/.../v1.0.0` | 模型下载源 |
-| `PIPER_INDEX_URL` / `PIP_INDEX_URL` | 阿里云 PyPI 镜像 | Python 依赖源 |
+| `PIPER_VOICES` | `zh_CN-huayan-medium zh_CN-chaowen-medium zh_CN-xiao_ya-medium en_US-lessac-medium` | 内置语音列表（空格分隔） |
+| `PIPER_VOICE_BASE` | `https://hf-mirror.com/rhasspy/piper-voices/resolve/main` | 模型下载源 |
+| `PIPER_G2PW_URL` | HuggingFace `.../_resources/g2pw.tar.gz` | g2pW 模型下载源 |
+| `PIPER_BERT_BASE` | HuggingFace `google-bert/bert-base-chinese` | BERT tokenizer 下载源 |
+| `PIP_INDEX_URL` | 阿里云 PyPI 镜像 | Python 依赖源 |
 
 ---
 
@@ -313,8 +339,17 @@ docker run -d -p 5001:5001 \
 **Q：第一次合成很慢？**
 首次请求需加载 ONNX 模型（约 1–3 秒），之后缓存在内存中，通常在 1 秒内完成。
 
+**Q：chaowen / xiao_ya 等中文音色报 `'pinyin' is not a valid PhonemeType`？**
+v0.2.2 已升级到 `piper-tts 1.8.0` 并启用 `[zh]` extra，镜像内置 g2pW 模型与
+BERT tokenizer。若自行构建，请确认 `assets/g2pw.tar.gz` 完整（约 108 MB）或构建时能
+成功联网下载；运行日志中不应出现 `Downloading g2pW model`。
+
+**Q：拼音音色首次合成较慢？**
+首次使用需加载 159 MB 的 g2pW ONNX 模型，约增加 2–4 秒，之后进程内缓存。
+
 **Q：arm64 上能否运行？**
-可以，镜像已提供 arm64 版本。注意基础镜像使用 Python 3.11（`piper-phonemize` 的 aarch64 轮子仅覆盖 cp311）。
+可以。`piper-tts 1.8.0` 使用 abi3 wheel，amd64 / arm64 均有官方轮子；
+拼音资源与架构无关，多架构构建时只下载一次。
 
 **Q：如何回退到 pyttsx3？**
 `git checkout pyttsx3`，或使用 v0.1.0 镜像标签。

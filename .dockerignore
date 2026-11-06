@@ -21,4 +21,6 @@ deploy
 README.md
 AGENT.md
 docker-compose.yml
+# 发布包不参与构建，但保留可选的拼音构建资源
 *.tar.gz
+!assets/g2pw.tar.gz

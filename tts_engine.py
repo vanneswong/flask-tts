@@ -8,12 +8,16 @@
 语音目录（优先级从高到低）：
 - /opt/piper-voices  镜像内置模型
 - /app/voices        用户挂载卷，可用于追加自定义语音
+
+拼音语音（phoneme_type=pinyin，如 zh_CN-chaowen-medium）需要额外的
+g2pW 资源与 BERT tokenizer，默认从 /opt/piper-data 读取（构建镜像时预置）。
 """
 
 from __future__ import annotations
 
 import json
 import logging
+import os
 import threading
 import wave
 from dataclasses import asdict, dataclass
@@ -24,6 +28,12 @@ logger = logging.getLogger(__name__)
 
 # 默认语音搜索目录
 DEFAULT_VOICE_DIRS: Sequence[str] = ("/opt/piper-voices", "/app/voices")
+
+# pinyin 语音所需的 g2pW / BERT 资源目录
+DEFAULT_DATA_DIR = "/opt/piper-data"
+
+# 句间静音时长（秒）
+DEFAULT_SENTENCE_SILENCE = 0.2
 
 # 质量等级中文标签
 QUALITY_LABELS = {"x_low": "极低", "low": "低", "medium": "中", "high": "高"}
@@ -42,6 +52,7 @@ class VoiceInfo:
     language_family: str    # 例如 zh
     language_name: str      # 例如 简体中文
     quality: str            # x_low / low / medium / high
+    phoneme_type: str       # espeak / pinyin / text ...
     sample_rate: int
     num_speakers: int
     size_bytes: int
@@ -115,6 +126,7 @@ def _build_voice_info(model_path: Path) -> Optional[VoiceInfo]:
         language_family=lang_family,
         language_name=lang_name,
         quality=quality,
+        phoneme_type=config.get("phoneme_type") or "espeak",
         sample_rate=(config.get("audio") or {}).get("sample_rate", 22050),
         num_speakers=config.get("num_speakers", 1),
         size_bytes=size_bytes,
@@ -136,10 +148,27 @@ def _sort_key(voice: VoiceInfo) -> tuple:
 class PiperEngine:
     """Piper 语音合成引擎（线程安全）。"""
 
-    def __init__(self, voice_dirs: Optional[Sequence[Union[str, Path]]] = None):
+    def __init__(
+        self,
+        voice_dirs: Optional[Sequence[Union[str, Path]]] = None,
+        data_dir: Optional[Union[str, Path]] = None,
+        sentence_silence: Optional[float] = None,
+    ):
         self.voice_dirs = tuple(
             Path(d) for d in (voice_dirs or DEFAULT_VOICE_DIRS)
         )
+        self.data_dir = Path(
+            data_dir
+            or os.environ.get("PIPER_DATA_DIR")
+            or DEFAULT_DATA_DIR
+        )
+        if sentence_silence is None:
+            sentence_silence = float(
+                os.environ.get(
+                    "PIPER_SENTENCE_SILENCE", DEFAULT_SENTENCE_SILENCE
+                )
+            )
+        self.sentence_silence = max(0.0, float(sentence_silence))
         self._voices: Dict[str, VoiceInfo] = {}
         self._models: Dict[str, object] = {}
         self._load_lock = threading.Lock()   # 保护模型加载与缓存
@@ -209,8 +238,16 @@ class PiperEngine:
 
             from piper import PiperVoice  # 延迟导入，便于给出友好报错
 
-            logger.info("加载 Piper 语音模型：%s", info.model_path)
-            model = PiperVoice.load(info.model_path, config_path=info.config_path)
+            logger.info(
+                "加载 Piper 语音模型：%s（phoneme_type=%s）",
+                info.model_path,
+                info.phoneme_type,
+            )
+            model = PiperVoice.load(
+                info.model_path,
+                config_path=info.config_path,
+                download_dir=self.data_dir,
+            )
             self._models[info.id] = model
             return model
 
@@ -228,19 +265,39 @@ class PiperEngine:
 
         model = self._load_model(info)
 
+        # piper-tts 1.3+ 的合成参数统一放在 SynthesisConfig 中
+        from piper import SynthesisConfig
+
         # speed > 1 更快 => length_scale 更小
         speed = max(0.5, min(2.0, float(speed or 1.0)))
         length_scale = 1.0 / speed
+        syn_config = SynthesisConfig(length_scale=length_scale)
 
         out_path = Path(out_path)
         with self._synth_lock:
             with wave.open(str(out_path), "wb") as wav_file:
-                model.synthesize(
-                    text,
-                    wav_file,
-                    length_scale=length_scale,
-                    sentence_silence=0.2,
+                wav_file.setframerate(model.config.sample_rate)
+                wav_file.setsampwidth(2)
+                wav_file.setnchannels(1)
+
+                # 16-bit 单声道静音；先算采样数再乘 2，保证字节数为偶数
+                silence = bytes(
+                    int(model.config.sample_rate * self.sentence_silence) * 2
                 )
+
+                chunks = model.synthesize(text, syn_config)
+                wrote_audio = False
+                for index, chunk in enumerate(chunks):
+                    if index > 0:
+                        wav_file.writeframes(silence)
+                    wav_file.writeframes(chunk.audio_int16_bytes)
+                    wrote_audio = True
+
+                # 纯标点 / 空内容时写入极短静音，避免生成 0 帧 WAV
+                if not wrote_audio:
+                    wav_file.writeframes(
+                        bytes(int(model.config.sample_rate * 0.1) * 2)
+                    )
 
         logger.info(
             "合成完成：voice=%s, speed=%.2f, size=%d bytes",

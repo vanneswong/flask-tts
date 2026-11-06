@@ -46,22 +46,36 @@ v0.2.0 直接更换引擎为 Piper（VITS 神经网络 TTS），上述问题从�
 
 ## 为什么用 Python 3.11
 
-`piper-tts 1.2.0` 依赖 `piper-phonemize 1.1.0`，其 wheel 覆盖情况：
+v0.2.0 使用 `piper-tts 1.2.0`（依赖 `piper-phonemize 1.1.0`，其 aarch64 wheel
+只覆盖 cp39–cp311），因此当时选定 3.11。
 
-| Python | amd64 | arm64 |
-|---|---|---|
-| 3.9 | ✅ | ✅ |
-| 3.10 | ✅ | ✅ |
-| 3.11 | ✅ | ✅ |
-| **3.12** | ✅ | **❌ 缺失** |
+v0.2.2 升级到 `piper-tts 1.8.0` 后，该包使用 abi3 wheel（cp39+，amd64/arm64 均有），
+Python 3.11 已不再是硬性限制；镜像继续使用 3.11 以保持一致性与稳定性。
 
-项目需同时支持 amd64 与 arm64，因此选用 3.11。
+## v0.2.2：升级到 piper-tts 1.8.0
 
-## 为什么不用 piper-tts 1.8.0
+v0.2.1 使用 `piper-tts 1.2.0`，其 `PhonemeType` 只有 `espeak`，遇到
+`"phoneme_type": "pinyin"` 的中文音色（如 `zh_CN-chaowen-medium`、
+`zh_CN-xiao_ya-medium`）会直接报错：
 
-新版 `piper-tts` 把中文音素化拆到 `[zh]` extra（`g2pW` + `transformers`），体积暴涨且引入深度学习依赖。
-`1.2.0` 使用 `piper-phonemize`（内置 espeak-ng 数据，`zh_CN` 语音走 `cmn` 音素），
-镜像更轻（无 torch），中文合成实测正常。
+```
+'pinyin' is not a valid PhonemeType
+```
+
+v0.2.2 升级到 `piper-tts 1.8.0` 并安装 `[zh]` extra：
+
+| 变化 | 说明 |
+|---|---|
+| `requirements.txt` | `piper-tts[zh]==1.8.0` |
+| 拼音资源 | 构建时预置 g2pW 模型（159 MB）与 `bert-base-chinese` tokenizer 到 `/opt/piper-data` |
+| 合成 API | 改为 `PiperVoice.synthesize()` + `SynthesisConfig(length_scale=...)`，逐句写入并插入静音 |
+| 离线运行 | `HF_HUB_OFFLINE=1` / `TRANSFORMERS_OFFLINE=1`，g2pW `config.py` 指向本地 tokenizer |
+| 默认音色 | 增加 `zh_CN-chaowen-medium`、`zh_CN-xiao_ya-medium` |
+| 前端 | Header 改为紧凑单行；历史列表新增删除按钮 |
+| API | 新增 `DELETE /api/audio/<filename>` |
+
+> 与旧文档中的结论不同：1.8.0 的 `[zh]` extra 自 1.6.1 起已移除 torch 依赖，
+> 仅使用 onnxruntime + transformers 的 tokenizer，镜像体积增量主要来自 g2pW 模型。
 
 ---
 
